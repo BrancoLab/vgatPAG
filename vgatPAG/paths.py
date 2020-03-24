@@ -19,3 +19,9 @@ mice_folders = [d for d in get_subdirs(main_data_folder) if 'BF1' in d]
 #                                  DEEPLABCUT                                  #
 # ---------------------------------------------------------------------------- #
 dlc_config_file = "D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\code\\DLC\\vgatPAG-federico-2020-02-25\\config.yaml"
+
+
+# ---------------------------------------------------------------------------- #
+#                                 SUMMARY DATA                                 #
+# ---------------------------------------------------------------------------- #
+summary_file = 'D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\VGAT_summary\\VGAT_summary.hdf5'
