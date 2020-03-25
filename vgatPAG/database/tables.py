@@ -140,6 +140,8 @@ class TiffTimes(dj.Imported):
         manual_insert_skip_duplicate(self, key)
 
 
+
+
 @schema
 class Roi(dj.Imported):
     definition = """
@@ -168,35 +170,59 @@ class Roi(dj.Imported):
             manual_insert_skip_duplicate(self, rkey)
 
 
+@schema 
+class ManualTrials(dj.Manual):
+    definition = """
+        trial_class: varchar(128)
+        -> Mouse
+        -> Session
+        trial_name: varchar(128)
+        ---
+        frame: int
+        manual_sess_name: varchar(128)
 
+    """
 
-# ------------------------------- Trials table ------------------------------- #
-# @schema
-# class Trial(dj.Manual):
-#     definition = """
-#         -> Session
-#         trial_name: varchar(128)
-#         ---
-#         frame: int
-#     """
+    def populate(self):
+        f, keys, subkeys, allkeys = open_hdf(summary_file)
 
-# @schema
-# class Roi(dj.Imported):
-#     definition = """
-#         -> Trial
-#         name: varchar(128)
-#         ---
-#         signal: longblob
-#     """
+        for trial_class in subkeys['all']:
+            sessions = list(dict(f['all'][trial_class]).keys())
+            for session in sessions:
+                trials = list(dict(f['all'][trial_class][session]).keys())
+                for trial in trials:
+                    tkey = dict(
+                        trial_class = trial_class,
+                        mouse = session.split("_")[1],
+                        sess_name = session.split("_")[2],
+                        frame = int(trial.split("_")[1]),
+                        trial_name = trial,
+                        manual_sess_name = session,
+                    )
+                    manual_insert_skip_duplicate(self, tkey)
 
-#     def _make_tuples(self, key):
-#         trial_content = get_trial_content(key['trial_class'], key['session'], key['trial_name'])
-#         rois = [k for k in trial_content.keys() if 'Raw_ROI' in k]
+@schema
+class ManulROIs(dj.Imported):
+    definition = """
+        -> ManualTrials
+        roi_id: varchar(128)
+        ---
+        signal: longblob
+    """
 
-#         for roi in rois:
-#             rkey = key.copy()
-#             rkey['name'] = roi
-#             rkey['signal'] = trial_content[roi][()]
-            
-#             manual_insert_skip_duplicate(self, rkey)
+    def _make_tuples(self, key):
+        tc = key['trial_class']
+        session = (ManualTrials & key).fetch1("manual_sess_name")
 
+        f, keys, subkeys, allkeys = open_hdf(summary_file)
+        trial = dict(f['all'][tc][session][key['trial_name']])
+
+        rois = [k for k in trial.keys() if 'CRaw_ROI' in k]
+        for roi in rois:
+            roi_trace = trial[roi][()]
+
+            rkey = key.copy()
+            rkey['roi_id'] = roi
+            rkey['signal'] = roi_trace
+
+            manual_insert_skip_duplicate(self, rkey)

@@ -6,6 +6,8 @@ import sys
 sys.path.append("./")
 
 from vgatPAG.paths import mice_folders, dlc_config_file
+from vgatPAG.database.tables import *
+
 
 try:
     import deeplabcut as dlc
@@ -41,27 +43,22 @@ bsegments = [ # Body segments used to get stuff like angular velocity, orientati
 # ---------------------------------------------------------------------------- #
 # Loop over each mouse's folder to get the list of files not tracked
 videos_to_process = []
-for fold_n, folder in enumerate(mice_folders):
-    print(f"Processing {folder} - {fold_n + 1} of {len(mice_folders)}.")
 
-    # Get subfolders with daily recordings
-    subfolds = get_subdirs(folder)
+recordings = Recording().fetch(as_dict=True)
+for rec in recordings:
+    video = rec['videofile']
+    fld = get_session_folder(**rec)
 
-    # Loop over subfolders
-    for subfold in subfolds:
-        # Get videos
-        videos = [f for f in listdir(subfold) if f.endswith('.mp4') or f.endswith('.avi')]
-        videos = [f for f in videos if 'dlc' not in f.lower()] # just in case
+    dlc_analysed = [f for f in listdir(fld) if 'DLC' in f and f.endswith(".h5") and get_file_name(video) in f]
+    if not dlc_analysed:
+        videos_to_process.append(os.path.join(fld, video))
 
-        # Get DLC tracking files if any
-        tracking_files = [get_file_name(f) for f in listdir(subfold) if f.endswith('.h5') and 'dlc' in f.lower()]
-
-        # Get videos not tracked
-        not_tracked = [f for f in videos if get_file_name(f) not in tracking_files]
-        videos_to_process.extend(not_tracked)
 
 # Start tracking
-print(f"Found {len(videos_to_process)} videos not tracked. Firing dlc up...")
+print(f"Found {len(videos_to_process)} videos not tracked:")
+print(*videos_to_process, sep="\n")
+print("Firing DLC up...")
+
 dlc.analyze_videos(dlc_config_file, 
                 videos_to_process, 
                 save_as_csv=False,
@@ -69,28 +66,3 @@ dlc.analyze_videos(dlc_config_file,
 
 
 
-# ---------------------------------------------------------------------------- #
-#                                POST PROCESSING                               #
-# ---------------------------------------------------------------------------- #
-# Get all the tracking outputs from dlc and process them with the behaviour package
-files_to_process =  []
-for fold_n, folder in enumerate(mice_folders):
-    # Get subfolders with daily recordings
-    subfolds = get_subdirs(folder)
-
-    # Loop over subfolders
-    for subfold in subfolds:
-        files = [f for f in listdir(subfold) if f.endswith('.h5') and 'dlc' in f.lower()]
-        files_to_process.extend(files)
-
-print(f"Processing {len(files_to_process)} files")
-for tracking_file in tqdm(files_to_process):
-    bp_tracking = prepare_tracking_data(tracking_file, 
-                                    median_filter=True,
-                                    fisheye=False, 
-                                    common_coord=False, 
-                                    compute=True
-                                    )
-    bones_tracking = compute_body_segments(bp_tracking, bsegments)
-
-    raise NotImplementedError("Find a way to save this to file")
