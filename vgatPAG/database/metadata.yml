@@ -1,0 +1,42 @@
+mice:
+    - BF161p1
+    - BF164p1
+    - BF164p2
+    - BF166p3
+
+sessions:
+    BF161p1:
+        19JUN03: 
+            - 19JUN03_BF161p1_v1
+            - 19JUN03_BF161p1_v2
+        19JUN04:
+            - 19JUN04_BF161p1_v1
+            - 19JUN04_BF161p1_v2
+
+    BF164p1:
+        19JUN05:
+            - 19JUN05_BF164p1_GCaMP_v1
+        19JUN18:
+            - 19JUN19_BF164p1_GCaMP_t1
+            - 19JUN19_BF164p1_GCaMP_t2
+            - 19JUN19_BF164p1_GCaMP_t3_chase
+
+    BF164p2:
+        19JUN24:
+            - 19JUN24_BF164p2_GCaMP_t2
+        19JUN26:
+            - 19JUN26_BF164p2_GCaMP_t1
+        19JUL15:
+            - 19JUL15_BF164p2_GCaMP_t1
+            - 19JUL15_BF164p2_GCaMP_t2
+
+    BF166p3:
+        19JUN05:
+            - 19JUN05_BF166p3_GCaMP_t2
+            - 19JUN05_BF166p3_GCaMP_t3
+            - 19JUN05_BF166p3_GCaMP_t4
+        19JUN19:
+            - 19JUN19_BF166p3_GCaMP_t2
+            - 19JUN19_BF166p3_GCaMP_t3
+
+

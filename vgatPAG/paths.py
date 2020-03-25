@@ -6,6 +6,8 @@ import os
 
 from fcutils.file_io.utils import listdir, get_subdirs
 
+metadatafile = "vgatPAG\database\metadata.yml"
+
 # ---------------------------------------------------------------------------- #
 #                                RAW DATA FOLDERS                              #
 # ---------------------------------------------------------------------------- #
