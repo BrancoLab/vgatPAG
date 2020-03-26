@@ -201,14 +201,22 @@ class ManualTrials(dj.Manual):
                     )
                     manual_insert_skip_duplicate(self, tkey)
 
+    def get_trial_classes(self):
+        tcs = list(set(self.fetch("trial_class")))
+        self.trial_classes = tcs
+        return tcs
+
 @schema
-class ManulROIs(dj.Imported):
+class ManualROIs(dj.Imported):
     definition = """
         -> ManualTrials
         roi_id: varchar(128)
         ---
         signal: longblob
     """
+
+    parent = ManualTrials
+    trial_classes = None
 
     def _make_tuples(self, key):
         tc = key['trial_class']
@@ -226,3 +234,44 @@ class ManulROIs(dj.Imported):
             rkey['signal'] = roi_trace
 
             manual_insert_skip_duplicate(self, rkey)
+
+    def get_mice(self):
+        return list(set(self.fetch("mouse")))
+
+    def get_mouse_sessions(self, mouse):
+        mice = self.get_mice()
+        if mouse not in mice: raise ValueError
+
+        return list(set((self & f"mouse='{mouse}'").fetch("sess_name")))
+
+    def get_session_trials(self, mouse, session):
+        if not session in self.get_mouse_sessions(mouse):
+            raise ValueError
+
+        return pd.DataFrame((self & f"mouse='{mouse}'" & f"sess_name='{session}'").fetch())
+
+
+    def get_trial_classes(self):
+        self.trial_classes = self.parent().get_trial_classes()
+        return self.trial_classes
+
+    def get_trials_in_class(self, tclass):
+        if self.trial_classes is None:
+            self.get_trial_classes()
+
+        if tclass not in self.trial_classes:
+            raise ValueError("Invalid trial class")
+
+        trials =  pd.DataFrame((self & f"trial_class='{tclass}'").fetch())
+        mice = list(set(trials.mouse.values))
+        sessions = {m:list(set(trials.loc[trials.mouse == m].sess_name.values)) for m in mice}
+        trials_by_mouse = {m: trials.loc[trials.mouse == m] for m in mice}
+        
+        trials_by_session = {}
+        for ss in sessions.values():
+            for s in ss:
+                trials_by_session[s] = trials.loc[trials.sess_name == s]
+
+        return trials, mice, sessions, trials_by_mouse, trials_by_session
+
+    # def get_all_trials_per_session(self, sess_name)

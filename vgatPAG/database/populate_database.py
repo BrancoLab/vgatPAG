@@ -36,5 +36,7 @@ Roi.populate()
 # ---------------------------- Pop manually curate --------------------------- #
 print("Populate manually curated data")
 ManualTrials.populate()
-ManulROIs.populate(display_progress=True)
+ManualROIs.populate(display_progress=True)
+
+print(ManualROIs())
 

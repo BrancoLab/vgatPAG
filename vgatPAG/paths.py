@@ -27,3 +27,9 @@ dlc_config_file = "D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\code\\DLC\\vgatPAG-
 #                                 SUMMARY DATA                                 #
 # ---------------------------------------------------------------------------- #
 summary_file = 'D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\VGAT_summary\\VGAT_summary.hdf5'
+
+
+# ---------------------------------------------------------------------------- #
+#                                    OUTPUT                                    #
+# ---------------------------------------------------------------------------- #
+output_fld = "D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\For_Fede\\plots"
