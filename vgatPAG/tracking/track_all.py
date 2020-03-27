@@ -39,6 +39,7 @@ bsegments = [ # Body segments used to get stuff like angular velocity, orientati
 
 
 # ---------------------------------------------------------------------------- #
+
 #                                   TRACKING                                   #
 # ---------------------------------------------------------------------------- #
 # Loop over each mouse's folder to get the list of files not tracked

@@ -4,6 +4,8 @@ import datetime
 import numpy as np
 import os
 
+from behaviour.tracking.tracking import prepare_tracking_data, compute_body_segments
+
 from fcutils.file_io.io import open_hdf, load_yaml
 from fcutils.file_io.utils import listdir, get_subdirs, get_last_dir_in_path, get_file_name
 from fcutils.video.utils import get_cap_from_file, get_video_params
@@ -117,6 +119,176 @@ class Recording(dj.Imported): #  In each session there might be multiple recordi
 
 
 @schema
+class VisualStimuli(dj.Imported):
+    definition = """
+        -> Session
+        rec_name: varchar(128)
+        frame: int
+        ---
+        protocol_name: varchar(256)
+
+    """
+    def _make_tuples(self, key):
+        session_fld = get_session_folder(**key)
+        recs = load_yaml(metadatafile)['sessions'][key['mouse']][key['sess_name']]
+
+        # Get each session's recordin AI file
+        for n, rec in enumerate(sorted(recs)):
+            rec_files = [f for f in os.listdir(session_fld) if rec in f]
+
+            ais = [fl for fl in rec_files if fl == f"{rec}.hdf5"]
+            if len(ais) != 1: raise ValueError
+            else: ai = ais[0]  
+            f, keys, subkeys, allkeys = open_hdf(os.path.join(session_fld, ai))
+
+            # Get stim start and protocol name
+            try:
+                protocol_names = dict(f['Visual Stimulation'])['Visual Protocol Names'][()].decode("utf-8") 
+            except KeyError as err:
+                return 
+
+            protocol_names = protocol_names.replace("[", "").replace("]", "").replace("'", "")
+            protocol_names = protocol_names.split(", u")
+
+            start_frames = np.where(dict(f['Visual Stimulation'])['Visual Stimulus Start Indices'][()] > 0)[0]
+
+            if len(start_frames) != len(protocol_names): raise ValueError
+
+            for sf, pc in zip(start_frames, protocol_names):
+                skey = key.copy()
+                skey['frame'] = sf
+                skey['protocol_name'] = pc
+                skey['rec_name'] = rec
+                manual_insert_skip_duplicate(self, skey)
+
+
+
+
+@schema
+class AudioStimuli(dj.Imported):
+    definition = """
+        -> Session
+        rec_name: varchar(128)
+        frame: int
+        ---
+        protocol_name: varchar(256)
+
+    """
+    def _make_tuples(self, key):
+        session_fld = get_session_folder(**key)
+        recs = load_yaml(metadatafile)['sessions'][key['mouse']][key['sess_name']]
+
+        # Get each session's recordin AI file
+        for n, rec in enumerate(sorted(recs)):
+            rec_files = [f for f in os.listdir(session_fld) if rec in f]
+
+            ais = [fl for fl in rec_files if fl == f"{rec}.hdf5"]
+            if len(ais) != 1: raise ValueError
+            else: ai = ais[0]  
+            f, keys, subkeys, allkeys = open_hdf(os.path.join(session_fld, ai))
+
+            # Get stim start and protocol name
+            try:
+                protocol_names = dict(f['Audio Stimulation'])['Audio Stimuli Names'][()].decode("utf-8") 
+            except KeyError as err:
+                return 
+
+            protocol_names = protocol_names.replace("[", "").replace("]", "").replace("'", "")
+            protocol_names = protocol_names.split(", u")
+            protocol_names =[pc.split("\\\\")[-1] for pc in protocol_names]
+
+            start_frames = np.where(dict(f['Audio Stimulation'])['Audio Stimuli Start Indices'][()] > 0)[0]
+
+            if len(start_frames) != len(protocol_names): raise ValueError
+
+            for sf, pc in zip(start_frames, protocol_names):
+                skey = key.copy()
+                skey['frame'] = sf
+                skey['protocol_name'] = pc
+                skey['rec_name'] = rec
+                manual_insert_skip_duplicate(self, skey)
+
+
+@schema
+class Tracking(dj.Imported):
+    definition = """
+        -> Recording
+    """
+    bparts = ['snout', 'left_ear', 'right_ear', 'neck', 'body', 'tail_base']
+    bsegments = {'head':('snout', 'neck'), 
+                'upper_body':('neck', 'body'),
+                'lower_body':('body', 'tail_base'),
+                'whole_body':('snout', 'tail_base')}
+
+    class BodyPartTracking(dj.Part):
+        definition = """
+            -> Tracking
+            bp: varchar(64)
+            ---
+            x: longblob
+            y: longblob
+            speed: longblob
+            dir_of_mvmt: longblob
+            angular_velocity: longblob
+        """
+
+    class BodySegmentTracking(dj.Part):
+        definition = """
+            -> Tracking
+            bp1: varchar(64)
+            bp2: varchar(64)
+            ---
+            orientation: longblob
+            angular_velocity: longblob
+        """
+
+    # Populate method
+    def _make_tuples(self, key):
+        session_fld = get_session_folder(**key)
+        recs = load_yaml(metadatafile)['sessions'][key['mouse']][key['sess_name']]
+
+        for n, rec in enumerate(sorted(recs)):
+            if rec != key['rec_name']: continue
+            
+            # Get files
+            rec_files = [f for f in os.listdir(session_fld) if rec in f]
+            tracking_file = [f for f in rec_files if 'dlc' in f.lower() and f.endswith('.h5')]
+            if len(tracking_file ) != 1: raise ValueError
+            else: tracking_file  = os.path.join(session_fld, tracking_file[0])
+
+            # Insert entry into main class
+            self.insert1(key)
+
+            # Load and clean tracking data
+            bp_tracking = prepare_tracking_data(tracking_file, median_filter=True,
+            								fisheye=False, common_coord=False, compute=True)
+            bones_tracking = compute_body_segments(bp_tracking, self.bsegments)
+
+            # Insert into the bodyparts tracking
+            for bp, tracking in bp_tracking.items():
+            	bp_key = key.copy()
+            	bp_key['bp'] = bp
+                
+            	bp_key['x'] = tracking.x.values
+            	bp_key['y'] = tracking.y.values
+            	bp_key['speed'] = tracking.speed.values
+            	bp_key['dir_of_mvmt'] = tracking.direction_of_movement.values
+            	bp_key['angular_velocity'] = tracking.angular_velocity.values
+
+            	self.BodyPartTracking.insert1(bp_key)
+
+            # Insert into the body segment data
+            for bone, (bp1, bp2) in self.bsegments.items():
+            	segment_key = key.copy()
+            	segment_key['bp1'] = bp1
+            	segment_key['bp2'] = bp2
+
+            	segment_key['orientation'] = bones_tracking[bone]['orientation'].values
+            	segment_key['angular_velocity'] = bones_tracking[bone]['angular_velocity'].values
+
+            	self.BodySegmentTracking.insert1(segment_key)
+
+@schema
 class TiffTimes(dj.Imported):
     definition = """
         -> Recording
@@ -169,6 +341,15 @@ class Roi(dj.Imported):
 
             manual_insert_skip_duplicate(self, rkey)
 
+
+
+
+
+
+
+# ---------------------------------------------------------------------------- #
+#                    MANUALLY DEFINE STUFF FROM SUMMARY HDF                    #
+# ---------------------------------------------------------------------------- #
 
 @schema 
 class ManualTrials(dj.Manual):

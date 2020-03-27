@@ -4,7 +4,7 @@
 
 import os
 
-from fcutils.file_io.utils import listdir, get_subdirs
+from fcutils.file_io.utils import get_subdirs
 
 metadatafile = "vgatPAG\database\metadata.yml"
 

@@ -12,28 +12,18 @@ from fcutils.plotting.colors import *
 from fcutils.plotting.utils import create_figure, clean_axes, save_figure
 from fcutils.objects import sort_list_of_strings
 
-from vgatPAG.database.tables import ManualROIs as ROIs
+from vgatPAG.database.db_tables import ManualROIs as ROIs
 from vgatPAG.paths import output_fld
+from vgatPAG.variables import miniscope_fps, tc_colors
 
-fps = 10
+fps = miniscope_fps
 sec_pre = 20
 # sec_post = 50
 
-trial_classes = ROIs().get_trial_classes()
-colors = [salmon, darkseagreen, goldenrod, orangered, navy, purple, chocolate, plum]
-tc_colors = {tc:c for tc, c in zip(trial_classes, colors)}
 
 
-tc_colors = {
-    'US_Escape':darkseagreen,
-    'US_noEscape':lawngreen,
 
-    'Loom_Escape':deepskyblue,
-    'Loom_noEscape':lightskyblue,
 
-    'None_Run':darkmagenta,
-    'None_Escape':lilla,
-    }
 # %%
 # ---------------------------------------------------------------------------- #
 #                         PLOT ALL TRACES FOR A SESSION                        #
