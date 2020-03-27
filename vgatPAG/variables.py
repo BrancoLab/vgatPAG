@@ -1,7 +1,5 @@
 from fcutils.plotting.colors import *
 
-from vgatPAG.database.tables import ManualROIs as ROIs
-
 
 # ---------------------------------- GENERAL --------------------------------- #
 miniscope_fps = 10
