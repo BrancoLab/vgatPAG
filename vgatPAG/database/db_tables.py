@@ -454,5 +454,3 @@ class ManualROIs(dj.Imported):
                 trials_by_session[s] = trials.loc[trials.sess_name == s]
 
         return trials, mice, sessions, trials_by_mouse, trials_by_session
-
-    # def get_all_trials_per_session(self, sess_name)

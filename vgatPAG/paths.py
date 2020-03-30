@@ -32,4 +32,4 @@ summary_file = 'D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\VGAT_
 # ---------------------------------------------------------------------------- #
 #                                    OUTPUT                                    #
 # ---------------------------------------------------------------------------- #
-output_fld = "D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\For_Fede\\plots"
+output_fld = "D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\Fede\\plots"
