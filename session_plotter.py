@@ -274,6 +274,8 @@ for sess in tqdm(sessions):
                     stp = 'audio'
                 save_figure(f, os.path.join(fld, f"{rec['mouse']}_{sess}_{stp}_trial{s}"), verbose=False)
 
-                # plt.show()
+                plt.show()
                 plt.close(f)
+
+                a = 1
 
