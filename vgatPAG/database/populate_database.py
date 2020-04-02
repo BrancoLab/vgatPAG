@@ -35,7 +35,7 @@ TiffTimes.populate()
 
 # --------------------------------- Tracking --------------------------------- #
 print("Populating Tracking")
-Tracking.populate()
+Trackings.populate(display_progress=True)
 
 
 # ---------------------------------- Pop ROI --------------------------------- #

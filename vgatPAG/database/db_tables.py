@@ -210,7 +210,7 @@ class AudioStimuli(dj.Imported):
 
 
 @schema
-class Tracking(dj.Imported):
+class Trackings(dj.Imported):
     definition = """
         -> Recording
     """
@@ -222,7 +222,7 @@ class Tracking(dj.Imported):
 
     class BodyPartTracking(dj.Part):
         definition = """
-            -> Tracking
+            -> Trackings
             bp: varchar(64)
             ---
             x: longblob
@@ -234,13 +234,13 @@ class Tracking(dj.Imported):
 
     class BodySegmentTracking(dj.Part):
         definition = """
-            -> Tracking
+            -> Trackings
             bp1: varchar(64)
             bp2: varchar(64)
             ---
             orientation: longblob
             angular_velocity: longblob
-            length: longblob
+            bone_length: longblob
         """
 
     # Populate method
@@ -286,6 +286,7 @@ class Tracking(dj.Imported):
 
             	segment_key['orientation'] = bones_tracking[bone]['orientation'].values
             	segment_key['angular_velocity'] = bones_tracking[bone]['angular_velocity'].values
+            	segment_key['bone_length'] = bones_tracking[bone]['bone_length'].values
 
             	self.BodySegmentTracking.insert1(segment_key)
 
