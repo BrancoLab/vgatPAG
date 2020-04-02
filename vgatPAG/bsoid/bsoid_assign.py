@@ -45,7 +45,7 @@ def bsoid_assign(data, fps, comp, kclass, it):
 
         ## Obtain features, 4 distance features and 3 time-varying speed/angle features
         dataRange = len(data[m])
-        
+
         fpd = data[m][:,2:4] - data[m][:,4:6]
         cfp = np.vstack(((data[m][:,2]+data[m][:,4])/2,(data[m][:,3]+data[m][:,5])/2)).T
         cfpLen = len(cfp)
@@ -89,6 +89,8 @@ def bsoid_assign(data, fps, comp, kclass, it):
         feats.append(np.vstack((sn_cfp_norm_smth[1:],sn_chp_norm_smth[1:],fpd_norm_smth[1:],
                                         sn_pt_norm_smth[1:],sn_pt_ang_smth[:],sn_disp_smth[:],pt_disp_smth[:])))
     print("--- Feature extraction took s seconds ---"  (time.time() - start_time))  
+
+
     #Feature compilation
     start_time = time.time()
     if comp == 0:
@@ -106,6 +108,8 @@ def bsoid_assign(data, fps, comp, kclass, it):
           feats1 = np.hstack((np.mean((feats[n][0:4,range(k - round(fps / 10),k)]), axis = 1),
                               np.sum((feats[n][4:7,range(k - round(fps / 10),k)]), axis = 1))).reshape(len(feats[0]),1)
       print("--- Feature compilation took s seconds ---"  (time.time() - start_time))
+
+
       if comp == 1:
         if n > 0:
           f_10fps = np.concatenate((f_10fps,feats1),axis = 1)
@@ -121,6 +125,8 @@ def bsoid_assign(data, fps, comp, kclass, it):
           p = round(f_10fps[n].shape[1]/300)
           exag = round(f_10fps[n].shape[1]/1200)
           lr = round(np.log(f_10fps[n].shape[1])/0.04)
+        
+        
         start_time = time.time()
         ## Run t-SNE dimensionality reduction
         np.random.seed(0) # For reproducibility
@@ -147,6 +153,7 @@ def bsoid_assign(data, fps, comp, kclass, it):
                                      marker=dict(size=2.5, color=color[uniqueLabels], opacity=0.8))])
         fig.show()
         print('TADA! \n')
+        
     if comp == 1:
         if len(f_10fps) < 15000:
           p = 50
