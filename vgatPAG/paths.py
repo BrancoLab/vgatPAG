@@ -7,7 +7,10 @@ import sys
 
 from fcutils.file_io.utils import get_subdirs
 
-metadatafile = "vgatPAG\database\metadata.yml"
+if sys.platform == "darwin":
+    metadatafile = "vgatPAG/database/metadata.yml"
+else:
+    metadatafile = "vgatPAG\database\metadata.yml"
 
 
 # ---------------------------------------------------------------------------- #

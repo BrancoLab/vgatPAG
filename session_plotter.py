@@ -202,17 +202,6 @@ for sess in tqdm(sessions):
                 X = np.arange(btrack.shape[1])
                 plot_shaded_withline(speed_ax, X, btrack[2, :], color=color)
                 plot_shaded_withline(dist_ax, X, shelter_distance, color=color)
-                if at_shelter is not None:
-                    for ax in [speed_ax, dist_ax]:
-                        ax.axvline(at_shelter, lw=2, ls=":", color=[.2, .2, .2])
-
-
-                # Add vline where stimuli happened
-                vclose, aclose = get_other_stims_in_window(vstims, astims, stim,frames_pre, frames_post)
-                for slist in [vclose, aclose, [frames_pre]]:
-                    for ax in [dist_ax, speed_ax]:
-                        for st in slist:
-                            ax.axvline(st, lw=2, color=[.4, .4, .4], ls="--", zorder=99)
 
                 # plot rois
                 for rid, rsig, rcol, ax in zip(roi_ids, roi_sigs, roi_colors, roi_axes):
@@ -220,14 +209,21 @@ for sess in tqdm(sessions):
                     plot_shaded_withline(ax, np.arange(frames_pre+frames_post), 
                                 rsig[stim-frames_pre:stim+frames_post], color=desaturate_color(color))
 
-                # Vertical line at relevant times
-                for slist in [[frames_pre]]:
+                # Add vline where stimuli happened
+                vclose, aclose = get_other_stims_in_window(vstims, astims, stim,frames_pre, frames_post)
+                for slist in [vclose, aclose, [frames_pre]]:
+                    for ax in [dist_ax, speed_ax, roi_ax]:
                         for st in slist:
-                            roi_ax.axvline(st, lw=2, color=[.4, .4, .4], ls="--", zorder=99)
-                            for ax in roi_axes:
-                                ax.axvline(st, lw=2, color=[.4, .4, .4], ls="--", zorder=99)
-                                if at_shelter is not None:
-                                    ax.axvline(at_shelter, lw=2, ls=":", color=[.2, .2, .2])
+                            ax.axvline(st, lw=2, color=[.4, .4, .4], ls="--", zorder=99)
+                    for ax in roi_axes:
+                        for st in slist:
+                            ax.axvline(st, lw=2, color=[.4, .4, .4], ls="--", zorder=99)
+
+                # add vline for at shelter
+                if at_shelter is not None:
+                    for ax in [speed_ax, dist_ax]:
+                        ax.axvline(at_shelter, lw=2, ls=":", color=[.2, .2, .2])
+                    ax.axvline(at_shelter, lw=2, ls=":", color=[.2, .2, .2])
 
                 # Get sorted ROI traces for this trial
                 rois_signal = np.array(roi_sigs)[:, stim-frames_pre:stim+frames_post]
@@ -277,5 +273,8 @@ for sess in tqdm(sessions):
                 plt.show()
                 plt.close(f)
 
-                a = 1
+                break
+            break
+        break
+    break
 

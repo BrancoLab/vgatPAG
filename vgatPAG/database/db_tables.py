@@ -240,6 +240,7 @@ class Tracking(dj.Imported):
             ---
             orientation: longblob
             angular_velocity: longblob
+            length: longblob
         """
 
     # Populate method
