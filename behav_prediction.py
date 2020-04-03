@@ -15,17 +15,19 @@ from sklearn.mixture import GaussianMixture as GMM
 import cv2
 import multiprocessing as mp
 from termcolor import cprint
-
+from scipy.signal import resample
 from sklearn import preprocessing
 
-from fcutils.maths.utils import interpolate_nans, get_random_rows_from_array
+from fcutils.maths.utils import interpolate_nans, get_random_rows_from_array, rolling_mean
 from fcutils.maths.geometry import calc_ang_velocity
 from fcutils.plotting.colors import salmon
 from fcutils.plotting.colors import colorMap
 from fcutils.file_io.io import load_pickle, save_pickle
-
+from fcutils.maths.utils import derivative
 from fcutils.plotting.utils import clean_axes
 from fcutils.video.utils import get_cap_from_file, get_cap_selected_frame, get_video_params, open_cvwriter
+
+# from behaviour.tracking.tracking import compute_bone_semgent
 
 from vgatPAG.database.db_tables import *
 from vgatPAG.paths import main_data_folder
@@ -65,57 +67,63 @@ class BehaviourPrediction:
         verbose=False,
     )
 
-    def __init__(self, n_behav_classes=4, umapper=None):
-        self.tracking = None
+    def __init__(self, n_behav_classes=4, umapper=None, fps=30):
+        self.features = None
         self.n_behav_classes = n_behav_classes
         self.umapper = umapper
+        self.fps = fps
 
-    # ------------------------------------ Fit ----------------------------------- #
-    def prep_recording_tracking_data(self, recs):
+    # ------------------------------ Preprocess data ----------------------------- #
+    def prepare_features(self, recs):
         self.rec = recs[0]
 
-        tracking = []
+        features = []
         for n, rec in enumerate(recs):
-        # Fetch data
+            # Fetch data
             bp_tracking = pd.DataFrame((Trackings * Trackings.BodyPartTracking & f"rec_name='{rec}'" & "bp!='left_ear'" & "bp!='right_ear'").fetch())
             bs_tracking = pd.DataFrame((Trackings * Trackings.BodySegmentTracking & f"rec_name='{rec}'").fetch())
 
-            # Isolate relevant features
-            speeds = np.vstack([s for s in bp_tracking.speed.values]).T
-            ang_vels = np.vstack([s for s in bs_tracking.angular_velocity.values]).T
-            lengths = np.vstack([s for s in bs_tracking.bone_length.values]).T
+            snout = bp_tracking.loc[bp_tracking.bp == "snout"].iloc[0]
+            body = bp_tracking.loc[bp_tracking.bp == "body"].iloc[0]
+            neck = bp_tracking.loc[bp_tracking.bp == "neck"].iloc[0]
+            tail_base = bp_tracking.loc[bp_tracking.bp == "tail_base"].iloc[0]
 
-            # Compute angles between body segments
-            head_body_angle = bs_tracking.loc[(bs_tracking.bp1 == 'snout')&(bs_tracking.bp2 == 'neck')].orientation.values[0] - \
-                                bs_tracking.loc[(bs_tracking.bp1 == 'neck')&(bs_tracking.bp2 == 'body')].orientation.values[0]
-            head_body_angle = head_body_angle.reshape(head_body_angle.shape[0], 1)
+            whole_body_segment = bs_tracking.loc[(bs_tracking.bp1 == "snout") & (bs_tracking.bp2 == "tail_base")].iloc[0]
+            head_segment = bs_tracking.loc[(bs_tracking.bp1 == "snout") & (bs_tracking.bp2 == "neck")].iloc[0]
 
-            body_tail_angle = bs_tracking.loc[(bs_tracking.bp1 == 'neck')&(bs_tracking.bp2 == 'body')].orientation.values[0] - \
-                                bs_tracking.loc[(bs_tracking.bp1 == 'body')&(bs_tracking.bp2 == 'tail_base')].orientation.values[0]
-            body_tail_angle = body_tail_angle.reshape(body_tail_angle.shape[0], 1)
-
-            # Compute angular velocities
-            # head_body_ang_vel = calc_ang_velocity(head_body_angle.ravel())
-            # head_body_ang_vel = head_body_ang_vel.reshape(head_body_ang_vel.shape[0], 1)
-
-            # body_tail_ang_vel = calc_ang_velocity(body_tail_angle.ravel())
-            # body_tail_ang_vel = body_tail_ang_vel.reshape(body_tail_ang_vel.shape[0], 1)
-
-            # Concatenate
-            features = [speeds, ang_vels, lengths, head_body_angle, body_tail_angle] #, head_body_ang_vel, body_tail_ang_vel]
-            tracking.append(interpolate_nans(np.hstack(features)))
+            # Create features from tracking
+            rec_features = []
+            rec_features.append(whole_body_segment.bone_length)
+            rec_features.append(whole_body_segment.bone_length - head_segment.bone_length)
+            rec_features.append(snout.speed)
+            rec_features.append(tail_base.speed)
+            rec_features.append(derivative(whole_body_segment.orientation))
+            
+            features.append(interpolate_nans(np.vstack(rec_features).T))
 
             if n == 0:
-                first_tracking = interpolate_nans(np.hstack(features))
+                first_tracking = features[0]
 
-        # Put it all together and normalise
-        self.tracking = preprocessing.scale(np.vstack(tracking))
-        # self.tracking = np.vstack(tracking)
-        # self.tracking = self.tracking / np.linalg.norm(np.vstack(self.tracking), axis=0)
+        # Put it all together 
+        self.features = np.concatenate(features)
 
-        cprint(f"\nCollated tracking, found {self.tracking.shape[1]} features for {self.tracking.shape[0]} frames", "green", attrs=['bold'])        
-        return self.tracking, first_tracking
+        # smooth data with a ~60ms window (2 frames at 30fps)
+        window_size = int(np.ceil(60/(1000/self.fps)))
+        smoothed = np.zeros_like(self.features)
+        for i in range(self.features.shape[1]):
+            smoothed[:, i] = rolling_mean(self.features[:, i], 2)
+        self.features = smoothed
 
+        # downasmple data to be at ~10 fps
+        n_samples = smoothed.shape[0]
+        n_samples_at_10_fps = int(np.ceil((n_samples / self.fps) * 10))
+        self.features = resample(self.features, n_samples_at_10_fps)
+
+
+
+        cprint(f"\nCollated tracking, found {self.features.shape[1]} features for {self.features.shape[0]} frames", "green", attrs=['bold'])        
+        return self.features, first_tracking 
+    # ------------------------------------ Fit ----------------------------------- #
     @staticmethod
     def fit_glm(embedding, n_components):
         cprint(f"Fitting GMM to extract {n_components} clusters",  "green", attrs=['bold'])
@@ -124,16 +132,16 @@ class BehaviourPrediction:
 
 
     def fit(self, max_n_frames=-1, plot=False,  **kwargs):
-        if self.tracking is None: raise ValueError("Need to provide data first")
+        if self.features is None: raise ValueError("Need to provide data first")
 
         # prep umap params
         umap_params = {p:kwargs.pop(p, v) for p,v in self._umap_params.items()}
 
         # Select subset of data to use
-        if max_n_frames == -1 or max_n_frames >= self.tracking.shape[0]:
-            data= self.tracking.copy()
+        if max_n_frames == -1 or max_n_frames >= self.features.shape[0]:
+            data= self.features.copy()
         else:
-            data = get_random_rows_from_array(self.tracking, max_n_frames)
+            data = get_random_rows_from_array(self.features, max_n_frames)
 
         # Apply umap
         cprint(f"\nFitting UMAP with {data.shape[0]} frames - " + 
@@ -141,7 +149,7 @@ class BehaviourPrediction:
                     "green", attrs=['bold'])
         start = time.time()
         umapper = umap.UMAP(**umap_params)
-        embedding = umapper.fit_transform(self.tracking[:max_n_frames, :])
+        embedding = umapper.fit_transform(self.features[:max_n_frames, :])
         self.umapper = umapper
         cprint("UMAP fitting took {} seconds".format(round(time.time() - start, 2)),  "green", attrs=['bold'])
 
@@ -155,6 +163,8 @@ class BehaviourPrediction:
             if yn.lower() == "n":
                 self.n_behav_classes = int(input(f"Current number of clusters is {self.n_behav_classes}, what number should we use? "))
                 print(f"set number of behaviors to {self.n_behav_classes}")
+            elif yn.lower() == "z":
+                sys.exit()
 
         self.embedding = embedding
         return embedding
@@ -258,18 +268,18 @@ class BehaviourPrediction:
 if __name__ == "__main__":
     LOAD = False
     # Select an example session for testing
-    rec = Recording().fetch("rec_name")[:8]
+    recs = Recording().fetch("rec_name")[:8]
 
     bp = BehaviourPrediction()
-    tracking, first_tracking = bp.prep_recording_tracking_data(rec)
+    features, first_tracking = bp.prepare_features(recs)
 
     if LOAD:
         bp.load()
     else:
         # Embedd features and plot
-        embedding  = bp.fit(max_n_frames=50000, 
+        embedding  = bp.fit(max_n_frames=40000, 
                 plot=True,  
-                n_neighbors = 500,)
+                n_neighbors = 25,)
         bp.save()
 
     # Predict data    
