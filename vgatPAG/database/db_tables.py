@@ -262,6 +262,7 @@ class Trackings(dj.Imported):
 
             # Load and clean tracking data
             bp_tracking = prepare_tracking_data(tracking_file, median_filter=True,
+                                            likelihood_th=0.9,
             								fisheye=False, common_coord=False, compute=True)
             bones_tracking = compute_body_segments(bp_tracking, self.bsegments)
 
