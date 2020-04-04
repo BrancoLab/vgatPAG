@@ -19,7 +19,7 @@ from scipy.signal import resample
 from sklearn import preprocessing
 import math
 
-from MulticoreTSNE import MulticoreTSNE as TSNE
+# from MulticoreTSNE import MulticoreTSNE as TSNE
 
 from fcutils.maths.utils import interpolate_nans, get_random_rows_from_array, rolling_mean
 from fcutils.maths.geometry import calc_ang_velocity
@@ -30,7 +30,6 @@ from fcutils.maths.utils import derivative
 from fcutils.plotting.utils import clean_axes
 from fcutils.video.utils import get_cap_from_file, get_cap_selected_frame, get_video_params, open_cvwriter
 
-# from behaviour.tracking.tracking import compute_bone_semgent
 
 from vgatPAG.database.db_tables import *
 from vgatPAG.paths import main_data_folder
@@ -107,13 +106,12 @@ class BehaviourPrediction:
         # Create features from tracking
         rec_features = []
         rec_features.append(upper_torso.bone_length + lower_torso.bone_length)
-        rec_features.append(upper_torso.bone_length + lower_torso.bone_length + head_segment.bone_length)
+        rec_features.append(head_segment.bone_length)
         rec_features.append(neck.speed)
         rec_features.append(tail_base.speed)
-        rec_features.append(snout.speed - tail_base.speed)
-        rec_features.append(snout.angular_velocity)
-        rec_features.append(calc_ang_velocity(upper_torso.orientation)) # body delta angle
-        rec_features.append(upper_torso.orientation - lower_torso.orientation)
+        rec_features.append(body.angular_velocity)
+        rec_features.append(upper_angular_velocity) # body delta angle
+        rec_features.append(head.orientation - lower_torso.orientation)
 
         rec_features = np.vstack(rec_features).T 
         
