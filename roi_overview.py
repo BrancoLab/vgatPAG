@@ -27,6 +27,9 @@ from vgatPAG.database.db_tables import Trackings, AudioStimuli, VisualStimuli, S
 from vgatPAG.paths import output_fld
 from vgatPAG.variables import miniscope_fps, tc_colors, shelter_width_px
 
+
+np.warnings.filterwarnings('ignore')
+
 # ----------------------------------- Setup ---------------------------------- #
 # ? Define some params
 n_sec_pre = 2 
@@ -41,13 +44,13 @@ recordings = {s:(Recording & f"sess_name='{s}'").fetch(as_dict=True) for s in se
 
 
 def create_figure():
-    ncols = 3
-    nrows = 6
+    ncols = 5
+    nrows = 5
         
-    f, axarr = plt.subplots(figsize=(22, 12), ncols=ncols, nrows=nrows)
+    f, axarr = plt.subplots(figsize=(25, 12), ncols=ncols, nrows=nrows)
 
-    titles = ["Aligned to stim onset", "Aligned to escape onset", "Aligned to at shelter"]
-    ylables = ['Shelter dist, px', 'Speed, px/frame', 'Ang vel, def/frame', 'Raw ROI sig', 'Mean ROI sig', 'correlation']
+    titles = ["Aligned to stim onset", "Aligned to escape onset", "Aligned to at shelter", "Aligned to spont homing", "Aligned to spont runs"]
+    ylables = ['Shelter dist, px', 'Speed, px/frame', 'Ang vel, def/frame', 'Raw ROI sig', 'Mean ROI sig',]
     all_axes = []
     for i, title in enumerate(titles):
         axes = []
@@ -59,9 +62,6 @@ def create_figure():
                 ax.set(ylabel=ylabel)
             if n == nrows-1:
                 ax.set(xlabel="Time (s)")
-            if ylabel=='correlation':
-                ax.set(ylim=[-1, 1])
-                ax.axhline(0, lw=1, ls=":", color='k', alpha=.5)
             axes.append(ax)
         all_axes.append(axes)
     
@@ -107,7 +107,7 @@ def plot_traces(axes, shelter_distance, speed, ang_vel, rsig, frame, color):
         adjust_ticks(ax, frames_pre, frames_post, behav_fps, every=1)
         ax.axvline(frames_pre, lw=2, color='k', alpha=.7)
 
-def plot_roi_mean_sig(ax, traces):
+def plot_roi_mean_sig(ax, traces, label=None):
     mean, err = np.mean(traces, axis=0), sem(traces, axis=0)
 
     shape = np.array(traces).shape
@@ -122,24 +122,91 @@ def plot_roi_mean_sig(ax, traces):
                                         shuff_mean-shuff_err,  
                                         shuff_mean+shuff_err, color=silver, alpha=.1)
 
-    ax.plot(mean, lw=3, color=salmon)
+    ax.plot(mean, lw=3, color=salmon, label=label)
     ax.fill_between(np.arange(frames_pre + frames_post), 
                                         mean-err, 
                                         mean+err, color=salmon, alpha=.3)
 
-def plot_corr(x, y, ax, color, label=None, legend=False):
-    x = np.nanmean(x, axis=0)
-    y = np.nanmean(y, axis=0)
 
-    df = pd.DataFrame(dict(x=x, y=y))
-    r_window_size = 12
-    # Interpolate missing data.
-    df_interpolated = df.interpolate()
-    # Compute rolling window synchrony
-    rolling_r = df_interpolated['x'].rolling(window=r_window_size, center=True).corr(df_interpolated['y'])
 
-    ax.plot(rolling_r, lw=1.5, color=color, label=label, alpha=.4)
-    if legend: ax.legend()
+def get_spont_homings(shelter_distance, speed, roi_sig, astims, vstims):
+    stims = astims + vstims
+
+    in_roi = np.zeros_like(shelter_distance)
+    in_roi[shelter_distance > 400] = 1
+    in_shelt = np.zeros_like(shelter_distance)
+    in_shelt[shelter_distance <=100] = 1
+    speed_th = np.zeros_like(speed)
+    speed_th[speed > 4] = 1
+
+    ins, outs = get_times_signal_high_and_low(in_roi, th=.5, min_time_between_highs=frames_pre+frames_post+1)
+    ins_shelt, outs_shelt = get_times_signal_high_and_low(in_shelt, th=.5, min_time_between_highs=frames_pre+frames_post+1)
+
+    starts = []
+    for roi_out in outs:
+        next_in_shelt = [i for i in ins_shelt if i>roi_out]
+        if not next_in_shelt: continue
+        else:
+            next_in_shelt = next_in_shelt[0]
+
+        if next_in_shelt - roi_out > 3 * behav_fps: 
+            continue # we only want fast events
+        stims_range = [s for s in stims if np.abs(s - roi_out) < 6 * behav_fps] # we don't want stuff with stimuli involved
+        if stims_range: continue
+
+        fast = np.where(speed_th[:roi_out] == 1)[0][::-1]
+        start = fast[0]
+        for f in fast:
+            if start - f <= 1:
+                start = f
+            else:
+                break
+
+        # Check if thers roi sig
+        if np.std(roi_sig[start:next_in_shelt]) < 0.1: continue
+
+        starts.append(start)
+    return starts
+
+def get_roi_runs(shelter_distance, speed, roi_sig, astims, vstims):
+    stims = astims + vstims
+
+    in_roi = np.zeros_like(shelter_distance)
+    in_roi[shelter_distance > 400] = 1
+    in_shelt = np.zeros_like(shelter_distance)
+    in_shelt[shelter_distance <=100] = 1
+    speed_th = np.zeros_like(speed)
+    speed_th[speed > 4] = 1
+
+    ins, outs = get_times_signal_high_and_low(in_roi, th=.5, min_time_between_highs=frames_pre+frames_post+1)
+    ins_shelt, outs_shelt = get_times_signal_high_and_low(in_shelt, th=.5, min_time_between_highs=frames_pre+frames_post+1)
+
+    starts = []
+    for shelt_out in outs_shelt:
+        next_in_roi = [i for i in ins if i>shelt_out]
+        if not next_in_roi: continue
+        else:
+            next_in_roi = next_in_roi[0]
+
+        if next_in_roi - shelt_out > 3 * behav_fps: 
+            continue # we only want fast events
+        stims_range = [s for s in stims if np.abs(s - shelt_out) < 6 * behav_fps] # we don't want stuff with stimuli involved
+        if stims_range: continue
+
+        fast = np.where(speed_th[:shelt_out] == 1)[0][::-1]
+        start = fast[0]
+        for f in fast:
+            if start - f <= 1:
+                start = f
+            else:
+                break
+
+        # Check if thers roi sig
+        if np.std(roi_sig[start:next_in_roi]) < 0.1: continue
+
+        starts.append(start)
+    return starts
+
 
 
 # ---------------------------------------------------------------------------- #
@@ -175,7 +242,6 @@ for sess in tqdm(sessions):
                                     & f"rec_name='{rec['rec_name']}'" & "bp='body'").fetch1("x", "y", "speed"))
         ang_vel1 = median_filter((Trackings * Trackings.BodySegmentTracking & f"sess_name='{sess}'"
                                     & f"rec_name='{rec['rec_name']}'" & "bp1='neck'" & "bp2='body'").fetch1("angular_velocity"), kernel_size=11)
-
         ang_vel2 = median_filter((Trackings * Trackings.BodySegmentTracking & f"sess_name='{sess}'"
                                     & f"rec_name='{rec['rec_name']}'" & "bp1='body'" & "bp2='tail_base'").fetch1("angular_velocity"), kernel_size=11)
 
@@ -184,14 +250,18 @@ for sess in tqdm(sessions):
         shelter_distance = body_tracking[0, :]-shelter_width_px-200
 
 
-        # Get ROIs
+        # Get ROI traces
         roi_ids, roi_sigs = (Roi & f"sess_name='{sess}'" & f"rec_name='{rec['rec_name']}'").fetch("roi_id", "signal", as_dict=False)
         roi_sigs = [list(r) for r in roi_sigs]
         nrois = len(roi_ids)
         
+        # Get spont homings and runs
+        spont_homings = get_spont_homings(shelter_distance, speed, roi_sigs[0], astims, vstims)
+        spont_runs = get_roi_runs(shelter_distance, speed, roi_sigs[0], astims, vstims)
+
         # LOOP OVER ROIS
         for r, (roi_id, rsig) in enumerate(zip(roi_ids, roi_sigs)):
-            f, (stim_aligned_axs, escape_aligned_axs, shelt_aligned_axs) = create_figure()
+            f, (stim_aligned_axs, escape_aligned_axs, shelt_aligned_axs, spont_homing_axs, spont_runs_axs) = create_figure()
             f_path = get_figure_path(rec, sess, roi_id)
            
             stim_traces, escape_traces, shelt_traces = [], [], []
@@ -202,7 +272,7 @@ for sess in tqdm(sessions):
                 for stim, color in zip(stims, colors):
                     # Get times of events
                     try:
-                        estart = np.where(speed[stim+5:stim+frames_post]>=4)[0][0]+stim+5
+                        estart = np.where(speed[stim+5:stim+frames_post]>=6)[0][0]+stim+5
                     except:
                         continue
                     
@@ -231,6 +301,25 @@ for sess in tqdm(sessions):
                     dist_traces['shelter_aligned'].append(shelter_distance[stim-frames_pre:stim+frames_post])
                     speed_traces['shelter_aligned'].append(speed[stim-frames_pre:stim+frames_post])
 
+            # Plot spont homings
+            spont_traces = []
+            for spont in spont_homings:
+                plot_traces(spont_homing_axs, shelter_distance, speed, ang_vel, rsig, spont, magenta)
+                spont_traces.append(rsig[spont-frames_pre:spont+frames_post])
+
+            if spont_homings:
+                plot_roi_mean_sig(spont_homing_axs[4], spont_traces, label=f"{len(spont_traces)} spont. homings")
+                spont_homing_axs[4].legend()
+
+            # Plot spont runs
+            spont_runs_traces = []
+            for spont in spont_runs:
+                plot_traces(spont_runs_axs, shelter_distance, speed, ang_vel, rsig, spont, orange)
+                spont_runs_traces.append(rsig[spont-frames_pre:spont+frames_post])
+
+            if spont_runs:
+                plot_roi_mean_sig(spont_runs_axs[4], spont_runs_traces, label=f"{len(spont_runs_traces)} spont. runs")
+                spont_runs_axs[4].legend()
 
 
             # Plot mean ROI traces
@@ -240,20 +329,12 @@ for sess in tqdm(sessions):
                 plot_roi_mean_sig(shelt_aligned_axs[4], shelt_traces)
 
 
-                # Plot correlations
-                plot_corr(stim_traces, dist_traces['stim_aligned'], stim_aligned_axs[5], firebrick, label="Shelter distance")
-                plot_corr(stim_traces, speed_traces['stim_aligned'], stim_aligned_axs[5], saddlebrown, label="Speed", legend=True)
-
-                plot_corr(escape_traces, dist_traces['escape_aligned'], escape_aligned_axs[5], firebrick, label="Shelter distance")
-                plot_corr(escape_traces, speed_traces['escape_aligned'], escape_aligned_axs[5], saddlebrown, label="Speed", legend=True)
-
-                plot_corr(stim_traces, dist_traces['shelter_aligned'], shelt_aligned_axs[5], firebrick, label="Shelter distance")
-                plot_corr(stim_traces, speed_traces['shelter_aligned'], shelt_aligned_axs[5], saddlebrown, label="Speed", legend=True)
 
             f.suptitle(f"{rec['mouse']} - {sess} - {roi_id} - {n_trials} trials")
-            # save_figure(f, f_path, verbose=True)                
-            # plt.close(f)
-            break
-        break
-    break
-plt.show()
+            save_figure(f, f_path, verbose=True)                
+            plt.close(f)
+
+            # break
+    #     break
+    # break
+# plt.show() 
