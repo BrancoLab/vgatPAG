@@ -1,0 +1,165 @@
+lookup:
+    0: "no_trials"
+    1: "dip_on_entrance"
+    2: "unclear_but_smth"
+    3: "no_modulation"
+    4: "escape cell"
+    5: "shelter cell"
+
+
+sessions:
+    BF161p1:
+        19JUN03: # no good trials
+            - ROI_CRaw_ROI_1: 0
+            - ROI_CRaw_ROI_2: 0
+            - ROI_CRaw_ROI_3: 0
+            - ROI_CRaw_ROI_4: 0
+            - ROI_CRaw_ROI_5: 0
+            - ROI_CRaw_ROI_6: 0
+            - ROI_CRaw_ROI_7: 0
+            - ROI_CRaw_ROI_8: 0
+            - ROI_CRaw_ROI_9: 0
+            - ROI_CRaw_ROI_10: 0 
+            - ROI_CRaw_ROI_11: 0 
+            - ROI_CRaw_ROI_12: 0 
+            - ROI_CRaw_ROI_13: 0 
+            - ROI_CRaw_ROI_14: 0 
+            - ROI_CRaw_ROI_15: 0 
+            - ROI_CRaw_ROI_16: 0 
+            
+            
+        19JUN04: #  3 trials
+            - ROI_CRaw_ROI_1: 1
+            - ROI_CRaw_ROI_2: 1
+            - ROI_CRaw_ROI_3: 2
+            - ROI_CRaw_ROI_4: 0
+            - ROI_CRaw_ROI_5: 2
+            - ROI_CRaw_ROI_6: 2
+            - ROI_CRaw_ROI_7: 4 # !
+            - ROI_CRaw_ROI_8: 3
+            - ROI_CRaw_ROI_9: 3
+            - ROI_CRaw_ROI_10: 1
+            
+
+    BF164p1:
+        19JUN05: # 8 trials
+            - ROI_CRaw_ROI_1: 3
+            - ROI_CRaw_ROI_2: 2
+            - ROI_CRaw_ROI_3: 3
+            - ROI_CRaw_ROI_4: 3
+            - ROI_CRaw_ROI_5: 3
+            - ROI_CRaw_ROI_6: 2/4
+            - ROI_CRaw_ROI_7: 4
+            - ROI_CRaw_ROI_8: 3
+            - ROI_CRaw_ROI_9: 2
+            - ROI_CRaw_ROI_10: 3
+            - ROI_CRaw_ROI_11: 2
+            - ROI_CRaw_ROI_12: 4
+            - ROI_CRaw_ROI_13: 3
+            - ROI_CRaw_ROI_14: 4
+            - ROI_CRaw_ROI_15: 2
+            - ROI_CRaw_ROI_16: 2
+            - ROI_CRaw_ROI_17: 3
+            - ROI_CRaw_ROI_18: 5
+            - ROI_CRaw_ROI_19: 2
+
+        19JUN18: # no good trials
+            - ROI_CRaw_ROI_1: 
+            - ROI_CRaw_ROI_2: 
+            - ROI_CRaw_ROI_3: 
+            - ROI_CRaw_ROI_4: 
+            - ROI_CRaw_ROI_5: 
+            - ROI_CRaw_ROI_6: 
+            - ROI_CRaw_ROI_7: 
+            - ROI_CRaw_ROI_8: 
+            - ROI_CRaw_ROI_9: 
+            - ROI_CRaw_ROI_10: 
+            - ROI_CRaw_ROI_11: 
+            
+            
+
+    BF164p2:
+        19JUN24: # 5 good trials
+            - ROI_CRaw_ROI_1: 5
+            - ROI_CRaw_ROI_2: 3
+            - ROI_CRaw_ROI_3: 2
+            - ROI_CRaw_ROI_4: 4 # !
+            - ROI_CRaw_ROI_5: 2
+            - ROI_CRaw_ROI_6: 4
+            - ROI_CRaw_ROI_7: 3
+            - ROI_CRaw_ROI_8: 3
+            - ROI_CRaw_ROI_9: 2
+            - ROI_CRaw_ROI_10: 2
+            - ROI_CRaw_ROI_11: 2
+            - ROI_CRaw_ROI_12: 5
+
+        19JUN26: # 2 trials
+            - ROI_CRaw_ROI_1: 4
+            - ROI_CRaw_ROI_2: 3
+            - ROI_CRaw_ROI_3: 3
+            - ROI_CRaw_ROI_4: 4
+            - ROI_CRaw_ROI_5: 4
+            - ROI_CRaw_ROI_6: 3
+            - ROI_CRaw_ROI_7: 3
+            - ROI_CRaw_ROI_8: 3
+            - ROI_CRaw_ROI_9: 3
+            - ROI_CRaw_ROI_10: 3
+            - ROI_CRaw_ROI_11: 3
+            - ROI_CRaw_ROI_12: 3
+            - ROI_CRaw_ROI_13: 3
+            - ROI_CRaw_ROI_14: 3
+            - ROI_CRaw_ROI_15: 3
+
+        19JUL15: # 8 trials
+            - ROI_CRaw_ROI_1: 4
+            - ROI_CRaw_ROI_2: 2
+            - ROI_CRaw_ROI_3: 3
+            - ROI_CRaw_ROI_4: 2
+            - ROI_CRaw_ROI_5: 3
+            - ROI_CRaw_ROI_6: 3
+            - ROI_CRaw_ROI_7: 3
+            - ROI_CRaw_ROI_8: 3
+            - ROI_CRaw_ROI_9: 3
+            
+
+    BF166p3:
+        19JUN05:
+            
+            
+            
+        19JUN19:
+            
+            
+            - ROI_CRaw_ROI_1: 
+            - ROI_CRaw_ROI_2: 
+            - ROI_CRaw_ROI_3: 
+            - ROI_CRaw_ROI_4: 
+            - ROI_CRaw_ROI_5: 
+            - ROI_CRaw_ROI_6: 
+            - ROI_CRaw_ROI_7: 
+            - ROI_CRaw_ROI_8: 
+            - ROI_CRaw_ROI_9: 
+            - ROI_CRaw_ROI_10: 
+            - ROI_CRaw_ROI_11: 
+            - ROI_CRaw_ROI_12: 
+            - ROI_CRaw_ROI_13: 
+            - ROI_CRaw_ROI_14: 
+            - ROI_CRaw_ROI_15: 
+            - ROI_CRaw_ROI_16: 
+            - ROI_CRaw_ROI_17: 
+            - ROI_CRaw_ROI_18: 
+            - ROI_CRaw_ROI_19: 
+            - ROI_CRaw_ROI_20: 
+            - ROI_CRaw_ROI_21: 
+            - ROI_CRaw_ROI_22: 
+            - ROI_CRaw_ROI_23: 
+            - ROI_CRaw_ROI_24: 
+            - ROI_CRaw_ROI_25: 
+            - ROI_CRaw_ROI_26: 
+            - ROI_CRaw_ROI_27: 
+            - ROI_CRaw_ROI_28: 
+            - ROI_CRaw_ROI_29: 
+            - ROI_CRaw_ROI_30: 
+            - ROI_CRaw_ROI_31: 
+            - ROI_CRaw_ROI_32: 
+            

@@ -105,13 +105,12 @@ class BehaviourPrediction:
 
         # Create features from tracking
         rec_features = []
-        rec_features.append(upper_torso.bone_length + lower_torso.bone_length)
-        rec_features.append(head_segment.bone_length)
-        rec_features.append(neck.speed)
+        rec_features.append(upper_torso.bone_length + lower_torso.bone_length + head_segment.bone_length)
+        rec_features.append(snout.speed)
         rec_features.append(tail_base.speed)
         rec_features.append(body.angular_velocity)
-        rec_features.append(upper_angular_velocity) # body delta angle
-        rec_features.append(head.orientation - lower_torso.orientation)
+        rec_features.append(upper_torso.angular_velocity) 
+        rec_features.append(head_segment.orientation - lower_torso.orientation)
 
         rec_features = np.vstack(rec_features).T 
         
@@ -332,7 +331,7 @@ if __name__ == "__main__":
     else:
         # Embedd features and plot
         embedding  = bp.fit(
-                max_n_frames=40000, 
+                max_n_frames=20000, 
                 plot=True,  
                 n_neighbors = 95,
                 n_components = 3,
