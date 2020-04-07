@@ -23,12 +23,14 @@ from scipy.signal import medfilt as median_filter
 from behaviour.utilities.signals import get_times_signal_high_and_low
 
 
-from vgatPAG.database.db_tables import Trackings, AudioStimuli, VisualStimuli, Session, Roi, Recording, Mouse
+from vgatPAG.database.db_tables import Trackings, AudioStimuli, VisualStimuli, Session, Roi, Recording, Mouse, TiffTimes
 from vgatPAG.paths import output_fld
 from vgatPAG.variables import miniscope_fps, tc_colors, shelter_width_px
 
 
 np.warnings.filterwarnings('ignore')
+
+
 
 # ----------------------------------- Setup ---------------------------------- #
 # ? Define some params
@@ -46,31 +48,44 @@ sessions = {m:(Session & f"mouse='{m}'").fetch("sess_name") for m in mice}
 recordings = {m:{s:(Recording & f"sess_name='{s}'" & f"mouse='{m}'").fetch(as_dict=True) for s in sessions[m]} for m in mice}
 
 
+
+
+
+# ------------------------------ Plotting Utils ------------------------------ #
 def create_figure():
-    ncols = 6
+    ncols = 7
     nrows = 5
         
     f, axarr = plt.subplots(figsize=(25, 12), ncols=ncols, nrows=nrows, sharey='row')
 
-    titles = ["Aligned to stim onset", "Aligned to escape onset", "Aligned to speed peak", "Aligned to at shelter", "Aligned to spont homing", "Aligned to spont runs"]
+    titles = ["Aligned to stim onset", "Aligned to escape onset", "Aligned to speed peak", 
+                "Aligned to at shelter", "Aligned to spont homing", "Aligned to spont runs",
+                "Correlations"]
     ylables = ['Shelter dist, px', 'Speed, px/frame', 'Ang vel, def/frame', 'Raw ROI sig', 'Mean ROI sig',]
     all_axes = []
     for i, title in enumerate(titles):
         axes = []
         for n, ylabel in enumerate(ylables):
             ax = axarr[n, i]
-            if n == 0:
-                ax.set(title=title)
-            if i == 0:
-                ax.set(ylabel=ylabel)
-            if n == nrows-1:
-                ax.set(xlabel="Time (s)")
-            if "Ang vel" in ylabel:
-                ax.set(ylim=[-20, 20])
+            if not "Corr" in title: 
+                if n == 0:
+                    ax.set(title=title)
+                if i == 0:
+                    ax.set(ylabel=ylabel)
+                if n == nrows-1:
+                    ax.set(xlabel="Time (s)")
+                if "Ang vel" in ylabel:
+                    ax.set(ylim=[-20, 20])
+            else:
+                if n == 0:
+                    ax.set(ylabel="shelt. dist", xlabel="Calcium")
+                elif n == 1:
+                    ax.set(ylabel="speed", xlabel="Calcium")
+
             axes.append(ax)
         all_axes.append(axes)
     
-    set_figure_subplots_aspect(left=0.06, right=0.97, bottom=0.05, top=0.93, wspace=0.17, hspace=0.3)
+    set_figure_subplots_aspect(left=0.06, right=0.97, bottom=0.05, top=0.93, wspace=0.17, hspace=0.4)
     clean_axes(f)
 
     return f, all_axes
@@ -112,25 +127,26 @@ def plot_traces(axes, shelter_distance, speed, ang_vel, rsig, frame, color):
         adjust_ticks(ax, frames_pre, frames_post, behav_fps, every=1)
         ax.axvline(frames_pre, lw=2, color='k', alpha=.7)
 
-def plot_roi_mean_sig(ax, traces, label=None):
+def plot_roi_mean_sig(ax, traces, random_traces, label=None):
     mean, err = np.mean(traces, axis=0), sem(traces, axis=0)
+    rmean, rerr = np.mean(random_traces, axis=0), sem(random_traces, axis=0)
 
-    shape = np.array(traces).shape
-    shuffled = np.array(traces).ravel()
-    np.random.shuffle(shuffled)
-    shuffled = shuffled.reshape(shape)
-
-    shuff_mean, shuff_err = np.mean(shuffled, axis=0), sem(shuffled, axis=0)
-
-    ax.plot(shuff_mean, lw=1, color=silver, alpha=.6)
+    ax.plot(rmean, lw=1, color=silver, alpha=.6)
     ax.fill_between(np.arange(frames_pre + frames_post), 
-                                        shuff_mean-shuff_err,  
-                                        shuff_mean+shuff_err, color=silver, alpha=.1)
+                                        rmean-rerr,  
+                                        rmean+rerr, color=silver, alpha=.2)
 
     ax.plot(mean, lw=3, color=salmon, label=label)
     ax.fill_between(np.arange(frames_pre + frames_post), 
                                         mean-err, 
                                         mean+err, color=salmon, alpha=.3)
+
+def plot_roi_correlation(roi_sig, speed, ax):
+    ax.scatter(roi_sig, speed, color=silver, s=5, alpha=.25)
+
+
+
+# ---------------------------------- Getters --------------------------------- #
 
 def get_spont_homings(shelter_distance, speed, roi_sig, astims, vstims):
     stims = astims + vstims
@@ -225,7 +241,7 @@ def get_roi_runs(shelter_distance, speed, roi_sig, astims, vstims):
                 break
 
         # Check if thers roi sig
-        if np.std(roi_sig[start-200:next_in_roi+200]) < 0.1: continue
+        if np.std(roi_sig[start-200 -frames_pre:next_in_roi+200+frames_post]) < 0.2: continue
 
         # Check that there's no errors
         if shelter_distance[start] > 100: continue
@@ -233,6 +249,15 @@ def get_roi_runs(shelter_distance, speed, roi_sig, astims, vstims):
         starts.append(start)
     return starts
 
+def get_roi_random_trace(rec, roi_sig):
+    is_recording = (TiffTimes & f"rec_name='{rec['rec_name']}'").fetch1("is_ca_recording")
+    rsig = np.array(roi_sig)[np.where(is_recording)]
+    start = np.random.randint(0, len(rsig))
+    return rsig[start-frames_pre:start+frames_post]
+
+def get_whole_roi_trace(roi_id, roi_sig, rec_name):
+    is_recording = (TiffTimes & f"rec_name='{rec['rec_name']}'").fetch1("is_ca_recording")
+    return np.array(roi_sig)[np.where(is_recording)], is_recording
 
 
 # ---------------------------------------------------------------------------- #
@@ -254,6 +279,7 @@ for mouse in mice:
         
         figures, axes, paths, n_trials = [], [], [], []
         stim_traces, escape_traces, speed_traces, shelt_traces = [], [], [], []
+        random_traces = []
         spont_traces, spont_runs_traces = [], []
         for n, roi_id in enumerate(roi_ids):
             f, axs = create_figure()
@@ -269,8 +295,14 @@ for mouse in mice:
             shelt_traces.append([])
             spont_traces.append([])
             spont_runs_traces.append([])
+            random_traces.append([])
 
             if DEBUG: break
+
+        # Whole traces holders
+        whole_traces = {r:[] for r in roi_ids}
+        whole_traces['speed'] = []
+        whole_traces['shelt_dist'] = []
 
         # Loop over recordings
         for rec in  recordings[mouse][sess]:
@@ -316,9 +348,18 @@ for mouse in mice:
             spont_homings = get_spont_homings(shelter_distance, speed, roi_sigs[0], astims, vstims)
             spont_runs = get_roi_runs(shelter_distance, speed, roi_sigs[0], astims, vstims)
 
+
+            # Keep whole traces
+            for roi_id, roi_sig in zip(roi_ids, roi_sigs):
+                trace, is_recording = get_whole_roi_trace(roi_id, roi_sig, rec['rec_name'])
+                whole_traces[roi_id].extend(list(trace))
+            whole_traces['speed'].extend(list(speed[np.where(is_recording)]))
+            whole_traces['shelt_dist'].extend(list(shelter_distance[np.where(is_recording)]))
+
+
             # LOOP OVER ROIS
             for r, (roi_id, rsig) in enumerate(zip(roi_ids, roi_sigs)):
-                f, (stim_aligned_axs, escape_aligned_axs, speed_aligned_axs, shelt_aligned_axs, spont_homing_axs, spont_runs_axs) = figures[r], axes[r]
+                f, (stim_aligned_axs, escape_aligned_axs, speed_aligned_axs, shelt_aligned_axs, spont_homing_axs, spont_runs_axs, corr_axs) = figures[r], axes[r]
                 f_path = paths[r]
             
                 for stims, colors in zip((astims, vstims), (astim_colors, vstim_colors)):
@@ -354,6 +395,9 @@ for mouse in mice:
                         plot_traces(shelt_aligned_axs, shelter_distance, speed, ang_vel, rsig, at_shelter, color)
                         shelt_traces[r].append(rsig[at_shelter-frames_pre:at_shelter+frames_post])
 
+                        # Get ROI random sample
+                        random_traces[r].append(list(get_roi_random_trace(rec, rsig)))
+
                 # Plot spont homings
                 for spont in spont_homings:
                     if shelter_distance[spont + frames_post + frames_pre] > 100: continue
@@ -366,30 +410,38 @@ for mouse in mice:
                     plot_traces(spont_runs_axs, shelter_distance, speed, ang_vel, rsig, spont, orange)
                     spont_runs_traces[r].append(rsig[spont-frames_pre:spont+frames_post])
 
+
                 if DEBUG: break
 
         # Now plot averages
         for r, roi_id in enumerate(roi_ids):
-            f, (stim_aligned_axs, escape_aligned_axs, speed_aligned_axs, shelt_aligned_axs, spont_homing_axs, spont_runs_axs) = figures[r], axes[r]
+            f, (stim_aligned_axs, escape_aligned_axs, speed_aligned_axs, shelt_aligned_axs, spont_homing_axs, spont_runs_axs, corr_axs) = figures[r], axes[r]
 
             # Plt mean for spont homings
             if spont_traces[r]:
-                plot_roi_mean_sig(spont_homing_axs[4], spont_traces[r], label=f"{len(spont_traces[r])} spont. homings")
+                plot_roi_mean_sig(spont_homing_axs[4], spont_traces[r], random_traces[r], label=f"{len(spont_traces[r])} spont. homings")
                 spont_homing_axs[4].legend()
 
             # Plt mean for spont runs
             if spont_runs_traces[r]:
-                plot_roi_mean_sig(spont_runs_axs[4], spont_runs_traces[r], label=f"{len(spont_runs_traces[r])} spont. runs")
+                plot_roi_mean_sig(spont_runs_axs[4], spont_runs_traces[r], random_traces[r], label=f"{len(spont_runs_traces[r])} spont. runs")
                 spont_runs_axs[4].legend()
 
 
             # Plot mean ROI traces
             if n_trials[r]:
-                plot_roi_mean_sig(stim_aligned_axs[4], stim_traces[r])
-                plot_roi_mean_sig(escape_aligned_axs[4], escape_traces[r])
-                plot_roi_mean_sig(shelt_aligned_axs[4], shelt_traces[r])
-                plot_roi_mean_sig(speed_aligned_axs[4], speed_traces[r])
+                plot_roi_mean_sig(stim_aligned_axs[4], stim_traces[r], random_traces[r])
+                plot_roi_mean_sig(escape_aligned_axs[4], escape_traces[r], random_traces[r])
+                plot_roi_mean_sig(shelt_aligned_axs[4], shelt_traces[r], random_traces[r])
+                plot_roi_mean_sig(speed_aligned_axs[4], speed_traces[r], random_traces[r])
 
+            if DEBUG: break
+
+        # Now plot correlations
+        for r, roi_id in enumerate(roi_ids):
+            f, (stim_aligned_axs, escape_aligned_axs, speed_aligned_axs, shelt_aligned_axs, spont_homing_axs, spont_runs_axs, corr_axs) = figures[r], axes[r]
+            plot_roi_correlation(whole_traces[roi_id], whole_traces['speed'], corr_axs[1])
+            plot_roi_correlation(whole_traces[roi_id], whole_traces['shelt_dist'], corr_axs[0])
 
             f.suptitle(f"{rec['mouse']} - {sess} - {roi_id} - {n_trials[r]} trials")
 
@@ -405,7 +457,5 @@ for mouse in mice:
         break
 
 
-# TODO get ROI rec times from Vanessas data
 # TODO look at overall correlation with running speed and shelter distance
-# TODO fix Y axes
-# TODO fix random ROI samples
+

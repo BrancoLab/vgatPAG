@@ -5,6 +5,7 @@ import numpy as np
 import os
 
 from behaviour.tracking.tracking import prepare_tracking_data, compute_body_segments
+from behaviour.utilities.signals import get_times_signal_high_and_low
 
 from fcutils.file_io.io import open_hdf, load_yaml
 from fcutils.file_io.utils import listdir, get_subdirs, get_last_dir_in_path, get_file_name
@@ -297,6 +298,8 @@ class TiffTimes(dj.Imported):
         -> Recording
         ---
         is_ca_recording: longblob    # 1 when Ca recording on, 0 otherwise
+        starts: longblob
+        ends: longblob
     """
     def _make_tuples(self, key):
         session_fld = get_session_folder(**key)
@@ -310,8 +313,13 @@ class TiffTimes(dj.Imported):
         roi_data = f['CRaw_ROI_1'][()]
         signal = np.ones_like(roi_data)
         signal[derivative(roi_data )== 0] = 0
+
+        starts, ends = get_times_signal_high_and_low(signal, th=.5)
+        if len(starts) != len(ends) or starts[0] > ends[0]: raise ValueError
         
         key['is_ca_recording'] = signal
+        key['starts'] = starts
+        key['ends'] = ends
         manual_insert_skip_duplicate(self, key)
 
 
