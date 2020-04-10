@@ -3,6 +3,9 @@ import pandas as pd
 import datetime
 import numpy as np
 import os
+from scipy.signal import medfilt as median_filter
+
+
 
 from behaviour.tracking.tracking import prepare_tracking_data, compute_body_segments
 from behaviour.utilities.signals import get_times_signal_high_and_low
@@ -14,7 +17,11 @@ from fcutils.maths.utils import derivative
 
 from vgatPAG.paths import summary_file, metadatafile, mice_folders
 from vgatPAG.database.dj_config import start_connection, dbname, manual_insert_skip_duplicate
+from vgatPAG.variables import miniscope_fps, tc_colors, shelter_width_px
+from vgatPAG.utils import get_spont_homings, get_spont_out_runs
+
 schema = start_connection()
+np.warnings.filterwarnings('ignore')
 
 # ---------------------------------------------------------------------------- #
 #                                     UTILS                                    #
@@ -70,6 +77,9 @@ class Session(dj.Imported):
 
 @schema
 class Recording(dj.Imported): #  In each session there might be multiple recordings...
+    min_time_between_stims = 12 # seconds
+
+
     definition = """
         -> Session
         rec_name: varchar(128)
@@ -117,6 +127,31 @@ class Recording(dj.Imported): #  In each session there might be multiple recordi
             rkey['fps_behav'] = fps
             rkey['n_samples'] = n_samples
             manual_insert_skip_duplicate(self, rkey)
+
+
+    def get_recording_fps(self, **kwargs):
+        return (self & kwargs).fetch1("fps_behav")
+
+    def get_recording_stimuli_clean(self, **kwargs):
+        # kwargs should have info about: sess_name, mouse, rec_name
+        # Get recording's fps
+        fps = self.get_recording_fps(**kwargs)
+        min_frames_betweeen_stimuli = self.min_time_between_stims * fps
+
+        # Fetch recording's stimuli and tracking data
+        # Get stimuli
+        vstims = (VisualStimuli & kwargs).fetch("frame")
+        astims = (AudioStimuli & kwargs).fetch("frame")
+
+        # Keep only stimuli that didn't happen immediately one after the other
+        if np.any(vstims):
+            vstims = [vstims[0]] + [s for n,s in enumerate(vstims[1:]) if s-vstims[n] > min_frames_betweeen_stimuli+1]
+        if np.any(astims):
+            astims = [astims[0]] + [s for n,s in enumerate(astims[1:]) if s-astims[n] > min_frames_betweeen_stimuli+1]
+        astims = [s for s in astims if s not in vstims] # for some reason some are repeated
+
+        return vstims, astims
+
 
 
 @schema
@@ -209,7 +244,6 @@ class AudioStimuli(dj.Imported):
                 skey['rec_name'] = rec
                 manual_insert_skip_duplicate(self, skey)
 
-
 @schema
 class Trackings(dj.Imported):
     definition = """
@@ -292,6 +326,21 @@ class Trackings(dj.Imported):
 
             	self.BodySegmentTracking.insert1(segment_key)
 
+
+    def get_recording_tracking_clean(self, **kwargs):
+        # kwargs should have info about: sess_name, mouse, rec_name
+        body_tracking = np.vstack((self * self.BodyPartTracking & kwargs & "bp='body'").fetch1("x", "y", "speed"))
+
+        # Get an average angular velocity  o minimise artifacts
+        ang_vel1 = median_filter((self * self.BodySegmentTracking & kwargs & "bp1='neck'" & "bp2='body'").fetch1("angular_velocity"), kernel_size=11)
+        ang_vel2 = median_filter((self * self.BodySegmentTracking & kwargs & "bp1='body'" & "bp2='tail_base'").fetch1("angular_velocity"), kernel_size=11)
+
+        ang_vel = np.median(np.vstack([ang_vel1, ang_vel2]), axis=0)
+        speed = median_filter(body_tracking[2, :], kernel_size=11)
+        shelter_distance = body_tracking[0, :]-shelter_width_px-200
+
+        return body_tracking, ang_vel, speed, shelter_distance
+
 @schema
 class TiffTimes(dj.Imported):
     definition = """
@@ -352,9 +401,125 @@ class Roi(dj.Imported):
 
             manual_insert_skip_duplicate(self, rkey)
 
+    def get_roi_signal_clean(self, recording_name, roi_id): 
+        # Returns a roi's trace but only for the frames where recording was on
+        is_recording = (TiffTimes & f"rec_name='{recording_name}'").fetch1("is_ca_recording")
+        signal = (self & f"rec_name='{recording_name}'" & f"roi_id='{roi_id}'").fetch1("signal")
+        return np.array(signal)[np.where(is_recording)]
+
+    def get_roi_signal_at_random_time(self, recording_name, roi_id, frames_pre, frames_post):
+        # Returns a section of roi signal cut out at a random time
+        signal = self.get_roi_signal_clean(recording_name, roi_id)
+        cut = frames_pre + frames_post + 2
+        start = np.random.randint(cut, len(signal)-cut)  # cut out initial and last frames to make sure it has correct length
+        return signal[start-frames_pre:start+frames_post]
+
+    def get_recordings_rois(self, **kwargs):
+        roi_ids, roi_sigs = (self & kwargs).fetch("roi_id", "signal", as_dict=False)
+        nrois = len(roi_ids)
+        return roi_ids, roi_sigs, nrois
+
+# ---------------------------------------------------------------------------- #
+#                                    EVENTS                                    #
+# ---------------------------------------------------------------------------- #
+# Stuff like trial start, escape onset, arrival at shelter, spontaneous escapes etc.
+
+@schema
+class Event(dj.Imported):
+    max_homing_duration = 4 # seconds
+    max_run_duration = 4 # second
+    min_time_after_stim = 6 # seconds
+    spont_initiation_speed = 4
+    escape_initiation_speed = 6
+
+    max_event_duration = 12 # seconds
 
 
+    definition = """
+        -> Recording
+    """
 
+    class Evoked(dj.Part): # stim evoked events
+        definition = """
+            -> Event
+            frame: int
+            type: enum("stim_onset", "escape_onset", "escape_peak_speed", "shelter_arrival")
+            --- 
+            stim_type: enum("visual", "audio")
+        """
+    
+    class Spontaneous(dj.Part): # stim evoked events
+        definition = """
+            -> Event
+            frame: int
+            type: enum("homing", "homing_peak_speed", "outrun")
+        """
+    
+    def _make_tuples(self, key):
+        # Prepr some vars
+        fps = Recording().get_recording_fps(**key)
+        max_homing_duration = self.max_homing_duration * fps
+        max_run_duration = self.max_run_duration * fps
+        min_time_after_stim = self.min_time_after_stim * fps
+
+        max_event_duration = self.max_event_duration * fps
+
+        # Get stimuli
+        vstims, astims = Recording().get_recording_stimuli_clean(**key)
+
+        # Get tracking
+        body_tracking, ang_vel, speed, shelter_distance = Trackings().get_recording_tracking_clean(**key)
+
+        # Get spontaneous homings and runs from tracking
+        homings = get_spont_homings(shelter_distance, speed, astims, vstims, max_homing_duration, min_time_after_stim, self.spont_initiation_speed)
+        runs = get_spont_out_runs(shelter_distance, speed, astims, vstims, max_run_duration, min_time_after_stim, self.spont_initiation_speed)
+
+        # now it's time to populate stuff
+        manual_insert_skip_duplicate(self, key) # insert into main tabel
+
+        # Insert into evoked subtable
+        for stims, stims_type in zip([astims, vstims], ["audio", "visual"]):
+            for stim in stims:
+                # Get the escape onset from the speed data
+                try:
+                    estart = np.where(speed[stim+5:stim+max_event_duration]>=escape_initiation_speed)[0][0]+stim+5
+                except:
+                    continue # if there's no escape ignore
+                
+                # Get if/when the mouse reacehd the shelter and ignore otherwsie
+                try:
+                    at_shelter = np.where(shelter_distance[stim:stim+max_event_duration] <= 0)[0][0] + stim
+                except:
+                    continue
+
+                # Get the time at which the peak of escape speed is reached
+                speed_peak = np.argmax(np.nan_to_num(speed[stim:stim+max_event_duration])) + stim
+
+                # Now add all of these events to the tables
+                events = [stim, estart, at_shelter, speed_peak]
+                classes = ["stim_onset", "escape_onset", "shelter_arrival", "escape_peak_speed"]
+                for ev, cl in zip(events, classes):
+                    ekey = key.copy()
+                    ekey['frame'] = ev
+                    ekey['type'] = cl
+                    ekey['stim_type'] = stims_type
+                    manual_insert_skip_duplicate(self.Evoked, ekey)
+
+        # And now populate spontaneous subtables
+        for spont in homings:
+            onset = np.argmax(np.nan_to_num(speed[spont:spont+max_event_duration])) + spont
+
+            for ev, cl in zip([spont, onset], ["homing", "homing_peak_speed"]):
+                skey = key.copy()
+                skey['frame'] = ev
+                skey['type'] = cl
+                manual_insert_skip_duplicate(self.Spontaneous, skey)
+
+        for spont in runs:
+            skey = key.copy()
+            skey['frame'] = spont
+            skey['type'] = "outrun"
+            manual_insert_skip_duplicate(self.Spontaneous, skey)
 
 
 

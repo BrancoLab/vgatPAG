@@ -41,6 +41,8 @@ print("Popualte ROIs")
 Roi.populate()
 
 
+# -------------------------------- Pop events -------------------------------- #
+Event.populate(display_progress=True)
 
 # # ---------------------------- Pop manually curate --------------------------- #
 # print("Populate manually curated data")

@@ -27,6 +27,8 @@ from vgatPAG.paths import output_fld
 from vgatPAG.variables import miniscope_fps, tc_colors, shelter_width_px
 
 
+
+
 # ----------------------------------- Setup ---------------------------------- #
 # ? Define some params
 n_sec_pre = 12 # keep it a multiple of 4 please
