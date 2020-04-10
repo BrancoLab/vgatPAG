@@ -375,6 +375,14 @@ class TiffTimes(dj.Imported):
         manual_insert_skip_duplicate(self, key)
 
 
+    def is_recording_on_in_interval(self, start, end, **kwargs):
+        # Checks if calcium recording is on in a given frames interval for a specific recording
+        is_rec = (self & kwargs).fetch("is_ca_recording")[0]
+        if np.sum(is_rec[start:end]) != len(is_rec[start:end]):
+            return False
+        else:
+            return True
+
 
 
 @schema
@@ -428,6 +436,7 @@ class Roi(dj.Imported):
         roi_sigs = {r:self.get_recordings_rois(sess_name=sess_name, rec_name=r)[1] for r in recs}
         nrois = {r:self.get_recordings_rois(sess_name=sess_name, rec_name=r)[2] for r in recs}
         return roi_ids, roi_sigs, nrois
+
 
 
 # ---------------------------------------------------------------------------- #

@@ -3,18 +3,22 @@ sys.path.append("./")
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import os
 from tqdm import tqdm
 import matplotlib.patches as patches
 from scipy.stats import sem
+import statsmodels.api as sm
+from sklearn import preprocessing
+from statsmodels.sandbox.regression.predstd import wls_prediction_std
 
 from fcutils.plotting.colors import desaturate_color
 from fcutils.plotting.colors import *
 from fcutils.plotting.utils import clean_axes, save_figure, set_figure_subplots_aspect
 from fcutils.file_io.utils import check_create_folder
+from fcutils.maths.utils import derivative
 
-
-from vgatPAG.database.db_tables import Trackings, Session, Roi, Recording, Mouse, Event
+from vgatPAG.database.db_tables import Trackings, Session, Roi, Recording, Mouse, Event, TiffTimes
 from vgatPAG.paths import output_fld
 from vgatPAG.variables import miniscope_fps, tc_colors, shelter_width_px, stims_colors, spont_events_colors
 
@@ -29,7 +33,12 @@ n_sec_pre = 2
 n_sec_post = 8
 n_sec_post_plot = 5
 
-DEBUG = True
+n_sec_pre_fit = 1.5
+n_sec_post_fit = 2
+
+if n_sec_pre_fit > n_sec_pre or n_sec_post_fit > n_sec_post: raise ValueError("Invalid settings")
+
+DEBUG = False
 
 mice = Mouse.fetch("mouse")
 
@@ -86,7 +95,7 @@ def adjust_ticks(ax, pre_frames, post_frames, fps, every=2):
     ax.set(xticks=np.concatenate([xticks, xticks2]), xticklabels=np.concatenate([xticks_labels, xticks_labels2]))
 
     ax.axvline(frames_pre, lw=1.5, color=blackboard, alpha=.7)
-    ax.axvspan(frames_pre-(fps * .5), frames_pre+(fps * .5), facecolor=desaturate_color(deepskyblue), alpha=0.075, zorder=-1)
+    # ax.axvspan(frames_pre-(fps * .5), frames_pre+(fps * .5), facecolor=desaturate_color(deepskyblue), alpha=0.075, zorder=-1)
 
 def get_figure_path(mouse, sess, roi_id):
     f1 = os.path.join(output_fld, f"{mouse}")
@@ -127,35 +136,71 @@ def plot_roi_mean_sig(ax, traces, random_traces, label=None):
     except:
         raise ValueError
 
-    ax.plot(rmean, lw=1, color=silver, alpha=.6)
     ax.fill_between(np.arange(frames_pre + frames_post), 
                                         rmean-rerr,  
                                         rmean+rerr, color=silver, alpha=.2)
+    ax.plot(rmean, lw=1, color=silver, alpha=.6)
 
-    ax.plot(mean, lw=3, color=salmon, label=label)
     ax.fill_between(np.arange(frames_pre + frames_post), 
                                         mean-err, 
                                         mean+err, color=salmon, alpha=.3)
+    ax.plot(mean, lw=3.5, color=white)
+    ax.plot(mean, lw=3, color=salmon, label='mean signal')
 
     # Compute and plot the pre vs post event osnet stuff
-    nframes = np.int(fps * .5)
-    pre = np.nanmean(mean[frames_pre - nframes:frames_pre])
-    post = np.nanmean(mean[frames_pre:frames_pre + nframes])
+    # nframes = np.int(fps * .5)
+    # pre = np.nanmean(mean[frames_pre - nframes:frames_pre])
+    # post = np.nanmean(mean[frames_pre:frames_pre + nframes])
 
-    pre_vs_post = (post-pre) / (pre+post)
-    ax.set(title=r"$\frac{post-pre}{pre+post} = "+ str(round(pre_vs_post, 2)) +"$")
-    y = ax.get_ylim()[0]+2
-    if pre_vs_post < 0:
-        rec = patches.Rectangle((y, frames_pre + (fps*pre_vs_post)), width=np.abs(fps*pre_vs_post), height=5,
-                    facecolor=blackboard, alpha=.8)
-    else:
-        rec = patches.Rectangle((y, frames_pre), width=np.abs(fps*pre_vs_post), height=5,
-                    facecolor=blackboard, alpha=.8)
-    ax.add_artist(rec)
+    # pre_vs_post = (post-pre) / (pre+post)
+    # ax.set(title=r"$\frac{post-pre}{pre+post} = "+ str(round(pre_vs_post, 2)) +"$")
+    # y = ax.get_ylim()[0]+2
+    # if pre_vs_post < 0:
+    #     rec = patches.Rectangle((y, frames_pre + (fps*pre_vs_post)), width=np.abs(fps*pre_vs_post), height=5,
+    #                 facecolor=blackboard, alpha=.8)
+    # else:
+    #     rec = patches.Rectangle((y, frames_pre), width=np.abs(fps*pre_vs_post), height=5,
+    #                 facecolor=blackboard, alpha=.8)
+    # ax.add_artist(rec)
 
     if label is not None:
         ax.legend()
 
+
+def fit_plot_model(ax, behav_traces, roi_trace=None, model=None):
+    def prep_exog(exog, behav_traces):
+        exog = exog.interpolate() # remove nans
+        # insh = pd.Series(np.hstack(behav_traces['shelter_distance'])).interpolate()
+        # exog = exog.loc[insh > 0]
+        return exog 
+
+    # prep data and fit
+    if model is None: # otherwise avoid fitting
+        exog = pd.DataFrame({k:preprocessing.scale(np.hstack(v)) for k,v in behav_traces.items()}) # data are scaled to have 0 mean and 1 std
+        exog = prep_exog(exog, behav_traces)
+        exog = sm.add_constant(exog, prepend=False)
+        endog = pd.DataFrame({"signal":np.hstack(roi_trace)})
+        endog = prep_exog(endog, behav_traces)
+
+        model = sm.RLM(endog.reset_index(drop=True), exog.reset_index(drop=True)).fit()
+
+    # Make predictions for each trial
+    predictions = [] 
+    for vals in zip(*behav_traces.values()):
+        nexog = pd.DataFrame({k:preprocessing.scale(v) for k,v in zip(behav_traces.keys(), vals)}) 
+        # nexog = prep_exog(nexog, behav_traces)
+        nexog = sm.add_constant(nexog, prepend=False)
+        predictions.append(model.predict(nexog.reset_index(drop=True)).values)
+    
+    # plot mean and error
+    mean, err = np.nanmean(predictions, axis=0), sem(predictions, axis=0)
+    x = np.arange(frames_pre - frames_pre_fit, frames_pre + frames_post_fit, 1)
+    ax.fill_between(x, mean-err, mean+err, color=cornflowerblue, alpha=.3)
+    ax.plot(x, mean, lw=3.5, alpha=0.7, color=white)
+    ax.plot(x, mean, lw=3, alpha=0.8, color=cornflowerblue, label="Model prediction")
+    ax.legend()
+
+    return model
 
 
 
@@ -177,6 +222,8 @@ for mouse in mice:
         fps = Recording().get_recording_fps(rec_name=recs[0])
         frames_pre = n_sec_pre * fps
         frames_post = n_sec_post * fps
+        frames_post_fit = n_sec_post_fit * fps
+        frames_pre_fit = n_sec_pre_fit * fps
         xmax = n_sec_post_plot * fps
         xmin = 0
 
@@ -207,7 +254,22 @@ for mouse in mice:
                 homing_peak_speed=[],
                 outrun=[],
                 random=[],
+
+                escape_onset_ols=[],
+                escape_peak_speed_ols=[], 
             )
+
+            # KEEP TRACKING DATA FOR ols
+            ols_behav_traces_escape_onset = dict(
+                speed = [],
+                acceleration = [],
+                shelter_distance = [],
+                ang_vel = [],
+            )
+
+            ols_behav_traces_escape_peak_speed = {k:v.copy() for k,v in ols_behav_traces_escape_onset.items()}
+            ols_behav_traces_escape_stim = {k:v.copy() for k,v in ols_behav_traces_escape_onset.items()}
+            ols_behav_traces_shelter_arrival = {k:v.copy() for k,v in ols_behav_traces_escape_onset.items()}
 
             # Loop over each recording in the session
             tot_trials = 0
@@ -226,8 +288,36 @@ for mouse in mice:
                     plot_traces(axs, shelter_distance, speed, ang_vel, rsig, ev.frame, color)
                     traces[ev.type].append(rsig[ev.frame-frames_pre:ev.frame+frames_post])
 
+                    if ev.type == "escape_onset": # keep traces for ols fitting
+                        container = ols_behav_traces_escape_onset
+                    elif ev.type == "escape_peak_speed":
+                        container = ols_behav_traces_escape_peak_speed
+                        
+                        # Keep the CA traces for fitting
+                        pre, post = int(ev.frame - frames_pre_fit), int(ev.frame+frames_post_fit)
+                        traces['escape_peak_speed_ols'].append(rsig[pre:post])
+                    elif ev.type == "stim_onset":
+                        container = ols_behav_traces_escape_stim
+                    elif ev.type == "shelter_arrival":
+                        container = ols_behav_traces_shelter_arrival
+                    else:
+                        container = None
+                    
+                    if container is not None:
+                        pre, post = int(ev.frame - frames_pre_fit), int(ev.frame+frames_post_fit)
+                        container['speed'].append(speed[pre:post])
+                        container['acceleration'].append(derivative(speed[pre:post]))
+                        container['shelter_distance'].append(shelter_distance[pre:post])
+                        container['ang_vel'].append(ang_vel[pre:post])
+
+              
+
                 # Plot spont events
                 for i, ev in spnt.iterrows():
+                    # Check if there was recording going on at this time
+                    if not TiffTimes().is_recording_on_in_interval(ev.frame-frames_pre, ev.frame+frames_post, sess_name=sess, rec_name=rec):
+                        continue
+
                     axs = axes[ev.type]
                     color = spont_events_colors[ev.type]
                     plot_traces(axs, shelter_distance, speed, ang_vel, rsig, ev.frame, color)
@@ -241,15 +331,25 @@ for mouse in mice:
 
             # Plot mean roi signal traces
             for key, trace in traces.items():
-                if key == 'random': continue
-                plot_roi_mean_sig(axes[key][4], trace, traces['random'])
+                if key == 'random' or 'ols' in key: continue
+                if np.any(trace):
+                    plot_roi_mean_sig(axes[key][4], trace, traces['random'])
 
+            # Fit OLS + plot
+            model = fit_plot_model(axes['escape_peak_speed'][4], ols_behav_traces_escape_peak_speed, traces['escape_peak_speed_ols'])
+            fit_plot_model(axes['escape_onset'][4], ols_behav_traces_escape_onset, model=model)
+            fit_plot_model(axes['stim_onset'][4], ols_behav_traces_escape_stim, model=model)
+            fit_plot_model(axes['shelter_arrival'][4], ols_behav_traces_shelter_arrival, model=model)
 
             # Refine figure
             f.suptitle(f"{mouse} - {sess} - {roi_ids[n]} - {tot_trials} trials")
             for ax in f.axes: 
                 adjust_ticks(ax, frames_pre, frames_post, fps, every=1)
                 ax.set(xlim=[xmin, xmax])
+
+            # Save and close
+            save_figure(f,f_path, verbose=True)
+            if not DEBUG: plt.close(f)
 
             if DEBUG: break
         if DEBUG: break
