@@ -129,6 +129,9 @@ class Recording(dj.Imported): #  In each session there might be multiple recordi
             manual_insert_skip_duplicate(self, rkey)
 
 
+    def get_sessions_recordings(self, sess_name):
+        return (self & f"sess_name='{sess_name}'").fetch("rec_name")
+
     def get_recording_fps(self, **kwargs):
         return (self & kwargs).fetch1("fps_behav")
 
@@ -419,6 +422,14 @@ class Roi(dj.Imported):
         nrois = len(roi_ids)
         return roi_ids, roi_sigs, nrois
 
+    def get_sessions_rois(self, sess_name):
+        recs = Recording().get_sessions_recordings(sess_name)
+        roi_ids = {r:self.get_recordings_rois(sess_name=sess_name, rec_name=r)[0] for r in recs}
+        roi_sigs = {r:self.get_recordings_rois(sess_name=sess_name, rec_name=r)[1] for r in recs}
+        nrois = {r:self.get_recordings_rois(sess_name=sess_name, rec_name=r)[2] for r in recs}
+        return roi_ids, roi_sigs, nrois
+
+
 # ---------------------------------------------------------------------------- #
 #                                    EVENTS                                    #
 # ---------------------------------------------------------------------------- #
@@ -482,7 +493,7 @@ class Event(dj.Imported):
             for stim in stims:
                 # Get the escape onset from the speed data
                 try:
-                    estart = np.where(speed[stim+5:stim+max_event_duration]>=escape_initiation_speed)[0][0]+stim+5
+                    estart = np.where(speed[stim+5:stim+max_event_duration]>=self.escape_initiation_speed)[0][0]+stim+5
                 except:
                     continue # if there's no escape ignore
                 
@@ -507,9 +518,9 @@ class Event(dj.Imported):
 
         # And now populate spontaneous subtables
         for spont in homings:
-            onset = np.argmax(np.nan_to_num(speed[spont:spont+max_event_duration])) + spont
+            peak_speed = np.argmax(np.nan_to_num(speed[spont:spont+max_event_duration])) + spont
 
-            for ev, cl in zip([spont, onset], ["homing", "homing_peak_speed"]):
+            for ev, cl in zip([spont, peak_speed], ["homing", "homing_peak_speed"]):
                 skey = key.copy()
                 skey['frame'] = ev
                 skey['type'] = cl
@@ -521,6 +532,17 @@ class Event(dj.Imported):
             skey['type'] = "outrun"
             manual_insert_skip_duplicate(self.Spontaneous, skey)
 
+
+    def get_recordings_events(self, **kwargs):
+        evoked = pd.DataFrame((self * self.Evoked & kwargs).fetch())
+        spont = pd.DataFrame((self * self.Spontaneous & kwargs).fetch())
+        return evoked, spont
+
+    def get_sessions_events(self, sess_name):
+        recs = Recording().get_sessions_recordings(sess_name)
+        evoked = {r:self.get_recordings_events(sess_name=sess_name, rec_name=r)[0] for r in recs}
+        spont = {r:self.get_recordings_events(sess_name=sess_name, rec_name=r)[1] for r in recs}
+        return evoked, spont
 
 
 # ---------------------------------------------------------------------------- #

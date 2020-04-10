@@ -16,3 +16,14 @@ tc_colors = {
     'None_Run':darkmagenta,
     'None_Escape':lilla,
     }
+
+stims_colors = dict(
+    visual=seagreen,
+    audio=salmon
+)
+
+spont_events_colors = dict(
+    homing=magenta,
+    homing_peak_speed =magenta,
+    outrun=orange
+)
