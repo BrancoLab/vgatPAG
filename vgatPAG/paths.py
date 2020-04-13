@@ -44,3 +44,4 @@ summary_file = os.path.join(main_data_folder, 'VGAT_summary', 'VGAT_summary.hdf5
 #                                    OUTPUT                                    #
 # ---------------------------------------------------------------------------- #
 output_fld = os.path.join(main_data_folder, 'Fede', 'plots')
+single_roi_models = os.path.join(main_data_folder, "Fede", "single_roi_models")

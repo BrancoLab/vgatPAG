@@ -12,14 +12,14 @@ import statsmodels.api as sm
 from sklearn import preprocessing
 from statsmodels.sandbox.regression.predstd import wls_prediction_std
 
-from fcutils.plotting.colors import desaturate_color
+from fcutils.plotting.colors import desaturate_color, makePalette
 from fcutils.plotting.colors import *
 from fcutils.plotting.utils import clean_axes, save_figure, set_figure_subplots_aspect
 from fcutils.file_io.utils import check_create_folder
 from fcutils.maths.utils import derivative
 
 from vgatPAG.database.db_tables import Trackings, Session, Roi, Recording, Mouse, Event, TiffTimes
-from vgatPAG.paths import output_fld
+from vgatPAG.paths import output_fld, single_roi_models
 from vgatPAG.variables import miniscope_fps, tc_colors, shelter_width_px, stims_colors, spont_events_colors
 
 
@@ -29,16 +29,16 @@ np.warnings.filterwarnings('ignore')
 
 # ----------------------------------- Setup ---------------------------------- #
 # ? Define some params
-n_sec_pre = 2 
+n_sec_pre = 5 
 n_sec_post = 8
 n_sec_post_plot = 5
 
-n_sec_pre_fit = 1.5
-n_sec_post_fit = 2
+n_sec_pre_fit = 5
+n_sec_post_fit = 5
 
 if n_sec_pre_fit > n_sec_pre or n_sec_post_fit > n_sec_post: raise ValueError("Invalid settings")
 
-DEBUG = False
+DEBUG = True # ! DEBUG
 
 mice = Mouse.fetch("mouse")
 
@@ -55,7 +55,7 @@ recordings = {m:{s:(Recording & f"sess_name='{s}'" & f"mouse='{m}'").fetch(as_di
 # ------------------------------- Figure utils ------------------------------- #
 def create_figure(xmin, xmax):
     ncols = 7
-    nrows = 5
+    nrows = 6
         
     f, axarr = plt.subplots(figsize=(25, 12), ncols=ncols, nrows=nrows, sharey='row')
 
@@ -145,7 +145,7 @@ def plot_roi_mean_sig(ax, traces, random_traces, label=None):
                                         mean-err, 
                                         mean+err, color=salmon, alpha=.3)
     ax.plot(mean, lw=3.5, color=white)
-    ax.plot(mean, lw=3, color=salmon, label='mean signal')
+    ax.plot(mean, lw=3, color=salmon)
 
     # Compute and plot the pre vs post event osnet stuff
     # nframes = np.int(fps * .5)
@@ -166,42 +166,42 @@ def plot_roi_mean_sig(ax, traces, random_traces, label=None):
     if label is not None:
         ax.legend()
 
+    return mean
 
-def fit_plot_model(ax, behav_traces, roi_trace=None, model=None):
-    def prep_exog(exog, behav_traces):
-        exog = exog.interpolate() # remove nans
-        # insh = pd.Series(np.hstack(behav_traces['shelter_distance'])).interpolate()
-        # exog = exog.loc[insh > 0]
-        return exog 
 
-    # prep data and fit
-    if model is None: # otherwise avoid fitting
-        exog = pd.DataFrame({k:preprocessing.scale(np.hstack(v)) for k,v in behav_traces.items()}) # data are scaled to have 0 mean and 1 std
-        exog = prep_exog(exog, behav_traces)
-        exog = sm.add_constant(exog, prepend=False)
-        endog = pd.DataFrame({"signal":np.hstack(roi_trace)})
-        endog = prep_exog(endog, behav_traces)
+def fit_ols(behav_traces, roi_trace):
+    exog = pd.DataFrame({k:preprocessing.scale(np.hstack(v)) for k,v in behav_traces.items()}).interpolate()
+    exog = sm.add_constant(exog, prepend=False)
+    endog = pd.DataFrame({"signal":np.hstack(roi_trace)}).interpolate()
 
-        model = sm.RLM(endog.reset_index(drop=True), exog.reset_index(drop=True)).fit()
+    model = sm.RLM(endog.reset_index(drop=True), exog.reset_index(drop=True)).fit()
+    return model
 
+def plot_model(ax, behav_traces, model, label, color):
     # Make predictions for each trial
     predictions = [] 
     for vals in zip(*behav_traces.values()):
-        nexog = pd.DataFrame({k:preprocessing.scale(v) for k,v in zip(behav_traces.keys(), vals)}) 
-        # nexog = prep_exog(nexog, behav_traces)
-        nexog = sm.add_constant(nexog, prepend=False)
-        predictions.append(model.predict(nexog.reset_index(drop=True)).values)
+        exog = pd.DataFrame({k:v for k,v in zip(behav_traces.keys(), vals)}).interpolate()
+
+        exog['shelt_speed'] = - derivative(exog['shelter_distance'].values)
+        exog['shelt_accel'] = derivative(exog['shelt_speed'].values)
+        exog['speedxsdist'] = (exog['shelt_speed'] * exog['shelter_distance'])
+
+        exog = pd.DataFrame(preprocessing.scale(exog.values, axis=0), columns=exog.columns, index=exog.index)
+
+        exog = sm.add_constant(exog, prepend=False)
+        predictions.append(model.predict(exog.reset_index(drop=True)).values)
+    if not predictions: raise ValueError
     
     # plot mean and error
     mean, err = np.nanmean(predictions, axis=0), sem(predictions, axis=0)
     x = np.arange(frames_pre - frames_pre_fit, frames_pre + frames_post_fit, 1)
-    ax.fill_between(x, mean-err, mean+err, color=cornflowerblue, alpha=.3)
+    ax.fill_between(x, mean-err, mean+err, color=color, alpha=.3)
     ax.plot(x, mean, lw=3.5, alpha=0.7, color=white)
-    ax.plot(x, mean, lw=3, alpha=0.8, color=cornflowerblue, label="Model prediction")
-    ax.legend()
+    ax.plot(x, mean, lw=3, alpha=0.8, color=color, label=label)
+    ax.legend(ncol=2, fontsize="x-small", labelspacing =.3, columnspacing =1.2)
 
-    return model
-
+    return model, mean
 
 
 # ---------------------------------------------------------------------------- #
@@ -224,12 +224,14 @@ for mouse in mice:
         frames_post = n_sec_post * fps
         frames_post_fit = n_sec_post_fit * fps
         frames_pre_fit = n_sec_pre_fit * fps
-        xmax = n_sec_post_plot * fps
+        xmax = n_sec_post_plot * fps + frames_pre
         xmin = 0
 
         # Loop over each ROI
         print(f"Mouse {mouse} - session: {sess} - [{len(roi_ids)} rois]")
         for n in tqdm(range(list(nrois.values())[0])):
+            if DEBUG and roi_ids[n] != "CRaw_ROI_2": continue
+
             # Create a figure for the ROI
             f, axs = create_figure(xmin, xmax)            
             axes = dict(
@@ -264,12 +266,15 @@ for mouse in mice:
                 speed = [],
                 acceleration = [],
                 shelter_distance = [],
+                # shelter_acceleration = [],
                 ang_vel = [],
             )
-
             ols_behav_traces_escape_peak_speed = {k:v.copy() for k,v in ols_behav_traces_escape_onset.items()}
             ols_behav_traces_escape_stim = {k:v.copy() for k,v in ols_behav_traces_escape_onset.items()}
             ols_behav_traces_shelter_arrival = {k:v.copy() for k,v in ols_behav_traces_escape_onset.items()}
+            ols_behav_traces_homing_onset = {k:v.copy() for k,v in ols_behav_traces_escape_onset.items()}
+            ols_behav_traces_hominst_peak_speed = {k:v.copy() for k,v in ols_behav_traces_escape_onset.items()}
+
 
             # Loop over each recording in the session
             tot_trials = 0
@@ -280,6 +285,12 @@ for mouse in mice:
 
                 # Get some more stuff
                 body_tracking, ang_vel, speed, shelter_distance = Trackings().get_recording_tracking_clean(sess_name=sess, rec_name=rec)
+                body_tracking = body_tracking[:, 1:] # drop first frame to match the calcium frames
+                speed = speed[1:]
+                shelter_distance = shelter_distance[1:]
+                ang_vel = ang_vel[1:]
+
+
 
                 # Plot evoked events
                 for i, ev in evkd.iterrows():
@@ -309,6 +320,7 @@ for mouse in mice:
                         container['acceleration'].append(derivative(speed[pre:post]))
                         container['shelter_distance'].append(shelter_distance[pre:post])
                         container['ang_vel'].append(ang_vel[pre:post])
+                        # container['shelter_acceleration'].append(derivative(shelter_distance[pre:post]))
 
               
 
@@ -317,6 +329,21 @@ for mouse in mice:
                     # Check if there was recording going on at this time
                     if not TiffTimes().is_recording_on_in_interval(ev.frame-frames_pre, ev.frame+frames_post, sess_name=sess, rec_name=rec):
                         continue
+
+                    if ev.type == "homing": # keep traces for ols fitting
+                        container = ols_behav_traces_homing_onset
+                    elif ev.type == "homing_peak_speed":
+                        container = ols_behav_traces_hominst_peak_speed
+                    else:
+                        container = None
+                    
+                    if container is not None:
+                        pre, post = int(ev.frame - frames_pre_fit), int(ev.frame+frames_post_fit)
+                        container['speed'].append(speed[pre:post])
+                        container['acceleration'].append(derivative(speed[pre:post]))
+                        container['shelter_distance'].append(shelter_distance[pre:post])
+                        container['ang_vel'].append(ang_vel[pre:post])
+                        # container['shelter_acceleration'].append(derivative(shelter_distance[pre:post]))
 
                     axs = axes[ev.type]
                     color = spont_events_colors[ev.type]
@@ -330,16 +357,31 @@ for mouse in mice:
                     traces['random'].append(list(Roi().get_roi_signal_at_random_time(rec, roi_ids[n], frames_pre, frames_post)))
 
             # Plot mean roi signal traces
+            means = {}
             for key, trace in traces.items():
                 if key == 'random' or 'ols' in key: continue
                 if np.any(trace):
-                    plot_roi_mean_sig(axes[key][4], trace, traces['random'])
+                    sig = plot_roi_mean_sig(axes[key][4], trace, traces['random'])
+                    means.append(sig)
 
-            # Fit OLS + plot
-            model = fit_plot_model(axes['escape_peak_speed'][4], ols_behav_traces_escape_peak_speed, traces['escape_peak_speed_ols'])
-            fit_plot_model(axes['escape_onset'][4], ols_behav_traces_escape_onset, model=model)
-            fit_plot_model(axes['stim_onset'][4], ols_behav_traces_escape_stim, model=model)
-            fit_plot_model(axes['shelter_arrival'][4], ols_behav_traces_shelter_arrival, model=model)
+            # Fetch and plot OLS fits
+            thresholds = [2]
+            colors = makePalette(cornflowerblue, mediumpurple, len(thresholds)+1)
+            for th, color in zip(thresholds, colors):
+                model_name = f"{mouse}_{sess}_roi_{roi_ids[n]}_speedth_{th}.pkl"
+                model = sm.load(os.path.join(single_roi_models , model_name))
+                args = [model, f"model", color]
+
+                predictions = {}
+                keys = []
+
+                plot_model(axes['escape_peak_speed'][4], ols_behav_traces_escape_peak_speed, *args)
+                plot_model(axes['escape_onset'][4], ols_behav_traces_escape_onset, *args)
+                plot_model(axes['stim_onset'][4], ols_behav_traces_escape_stim, *args)
+                plot_model(axes['shelter_arrival'][4], ols_behav_traces_shelter_arrival, *args)
+                plot_model(axes['homing'][4], ols_behav_traces_homing_onset, *args)
+                plot_model(axes['homing_peak_speed'][4], ols_behav_traces_hominst_peak_speed, *args)
+
 
             # Refine figure
             f.suptitle(f"{mouse} - {sess} - {roi_ids[n]} - {tot_trials} trials")
