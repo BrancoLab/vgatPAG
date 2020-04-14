@@ -15,16 +15,21 @@ def load_fit_cnfm(model_path, n_processes, dview):
 
 def get_mc_files_from_fld(fld):
     # Get motion corrected files
-    try:
-        rigid_mc = [f for f in listdir(fld) if "_rig__" in f and f.endswith("_.mmap") 
-                            and "_order_C" in f and "d2" in f and "d1" in f][0]
+    rigid_mc = [f for f in listdir(fld) if "_rig__" in f and f.endswith("_.mmap") 
+                        and "_order_C" in f and "d2" in f and "d1" in f]
 
-        pw_mc = [f for f in listdir(fld) if "_els__" in f and f.endswith("_.mmap") 
-                            and "_order_C" in f and "d2" in f and "d1" in f][0]
-    except:
-        raise ValueError("Could not load rigid and piecewise motion corrected videos. Make sure to run motion correction")
+    pw_mc = [f for f in listdir(fld) if "_els__" in f and f.endswith("_.mmap") 
+                        and "_order_C" in f and "d2" in f and "d1" in f]
+    
+    if len(rigid_mc) > 1 or len(pw_mc) > 1:
+        raise ValueError("Found too many files!")
+    elif not rigid_mc or not pw_mc:
+        raise ValueError("didn't find enough files")
     else:
-        return rigid_mc, pw_mc
+        rigid_mc = rigid_mc[0]
+        pw_mc = pw_mc[0]
+
+    return rigid_mc, pw_mc
 
 
 def load_fit_cnfm_and_data(fld, n_processes, dview, mc_type="els"):
@@ -75,6 +80,23 @@ def print_cnmfe_components(cnm, msg=None):
         print('Number of accepted components: ', len(cnm.estimates.idx_components))
     except :
         print("No accepted components yet")
+
+def start_server(n_processes=24):
+    # number of process to use, if you go out of memory try to reduce this one
+
+    try:
+        cm.stop_server()  # stop it if it was running
+    except():
+        pass
+
+    try:
+        c, dview, n_processes = cm.cluster.setup_cluster(backend='local',
+                                                        n_processes=n_processes,  
+                                                        single_thread=False)
+    except:
+        print("A cluster is already running")
+        return None, None, None
+    return c, dview, n_processes
 
 
 
