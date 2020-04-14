@@ -1,10 +1,12 @@
 
 from fcutils.file_io.utils import check_file_exists, get_file_name, check_create_folder, listdir
+from fcutils.file_io.io import load_yaml
 
 import matplotlib.pyplot as plot
 import os
 import numpy as np
 import cv2
+import logging
 
 import caiman as cm
 from caiman.source_extraction.cnmf.cnmf import load_CNMF
@@ -69,7 +71,15 @@ def load_fit_cnfm_and_data(fld, n_processes, dview, mc_type="els"):
     return cnm, model_filepath, Yr, dims, T, images, smooth_bg, cn_filter, pnr
 
 
+# ------------------------------- Params utils ------------------------------- #
+def load_params(fld, **kwargs):
+    params_file = os.path.join(fld, "01_PARAMS", "params.yml")
+    return load_yaml(params_file)
 
+def add_to_params_dict(params, **kwargs):
+    for k,v in kwargs.items():
+        params[k] = v
+    return params
 
 # -------------------------------- Small utils ------------------------------- #
 def print_cnmfe_components(cnm, msg=None):
@@ -80,6 +90,18 @@ def print_cnmfe_components(cnm, msg=None):
         print('Number of accepted components: ', len(cnm.estimates.idx_components))
     except :
         print("No accepted components yet")
+
+def log_cnmfe_components(cnm, msg=None):
+    try:
+        clean = f'Number of accepted components: {len(cnm.estimates.idx_components)}'
+    except :
+        clean = "No accepted components yet"
+
+    string = f"COMPONENTS - {msg}\n" + f"'Number of total components: {len(cnm.estimates.C)}\n" + clean
+    logging.info(string)
+
+
+
 
 def start_server(n_processes=24):
     # number of process to use, if you go out of memory try to reduce this one
