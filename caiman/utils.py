@@ -13,6 +13,20 @@ from caiman.source_extraction.cnmf.cnmf import load_CNMF
 def load_fit_cnfm(model_path, n_processes, dview):
     return load_CNMF(model_path, n_processes=n_processes, dview=dview)   
 
+def get_mc_files_from_fld(fld):
+    # Get motion corrected files
+    try:
+        rigid_mc = [f for f in listdir(fld) if "_rig__" in f and f.endswith("_.mmap") 
+                            and "_order_C" in f and "d2" in f and "d1" in f][0]
+
+        pw_mc = [f for f in listdir(fld) if "_els__" in f and f.endswith("_.mmap") 
+                            and "_order_C" in f and "d2" in f and "d1" in f][0]
+    except:
+        raise ValueError("Could not load rigid and piecewise motion corrected videos. Make sure to run motion correction")
+    else:
+        return rigid_mc, pw_mc
+
+
 def load_fit_cnfm_and_data(fld, n_processes, dview, mc_type="els"):
     """
         Loads a saved CNMF-E model and necessary data from a mouse's folder
@@ -26,15 +40,8 @@ def load_fit_cnfm_and_data(fld, n_processes, dview, mc_type="els"):
     cnm = load_fit_cnfm(model_filepath, n_processes, dview)
 
     # Get motion corrected files
-    try:
-        rigid_mc = [f for f in listdir(fld) if "_rig__" in f and f.endswith("_.mmap") 
-                            and "_order_C" in f and "d2" in f and "d1" in f][0]
+    rigid_mc, pw_mc = get_mc_files_from_fld(fld)
 
-        pw_mc = [f for f in listdir(fld) if "_els__" in f and f.endswith("_.mmap") 
-                            and "_order_C" in f and "d2" in f and "d1" in f][0]
-    except:
-        raise ValueError("Could not load rigid and piecewise motion corrected videos. Make sure to run motion correction")
-    
     if mc_type == "els":
         video = pw_mc
     elif mc_type == "rig":
@@ -100,4 +107,5 @@ def plot_components_over_image(img, ax, coords, lw, good_components, cmap="virid
                 continue
 
         ax.plot(*c['coordinates'].T, c=color, lw=lw)
-        ax.text(c['CoM'][1], c['CoM'][0], str(c['neuron_id']), color=color)
+        ax.scatter(c['CoM'][1], c['CoM'][0], s=400, color='k', zorder=80)
+        ax.text(c['CoM'][1]-1, c['CoM'][0]+1, str(c['neuron_id']), color='w', zorder=99)
