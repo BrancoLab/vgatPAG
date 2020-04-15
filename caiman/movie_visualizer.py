@@ -49,6 +49,7 @@ def compare_videos(rgb=False, contrast_limits=[120, 600], **kwargs):
         v = napari.Viewer(ndisplay=2)
 
         for n, (ttl, imgs) in enumerate(images.items()):
+            print(f"Loading data for movie: {ttl}")
             v.add_image(imgs, name=ttl, colormap=_cmaps[n], contrast_limits=contrast_limits)
 
         v.grid_view(n_column=len(list(images.keys())))
@@ -58,7 +59,7 @@ def compare_videos(rgb=False, contrast_limits=[120, 600], **kwargs):
 # > example of how to sue compare videos to look at a few videos at the same time
 if __name__ == "__main__":
     fld = "D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\BF164p1\\19JUN05"
-    v1 = os.path.join(fld, '19JUN05_BF164p1_v1_ds126_crop_ffcSub.tif')
+    v1 = os.path.join(fld, '19JUN05_BF164p1_v1_ds126_crop_ffcSub.tiff')
     v2 = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_crop_ffcSub_rig__d1_109_d2_92_d3_1_order_C_frames_22662_.mmap")
     v3 = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_crop_ffcSub_els__d1_109_d2_92_d3_1_order_C_frames_22662_.mmap")
 

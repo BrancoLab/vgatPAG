@@ -1,51 +1,194 @@
 # A detailed description of the parameters used can be found here: https://caiman.readthedocs.io/en/master/Getting_Started.html#basic-structure
+# And all the params are here: https://github.com/flatironinstitute/CaImAn/blob/master/caiman/source_extraction/cnmf/params.py
+
+
+# ------------------------------- Patch params ------------------------------- #
+pathch_params:
+    rf: 30 
+                # Half-size of patch in pixels. If None, no patches are constructed and the whole FOV is processed jointly
+    stride: 15
+                # Overlap between neighboring patches in pixels. (keep it at least large as gSiz, i.e 4 times the neuron size gSig)
+    nb_patch: 0 
+                # Number of (local) background components per patch
+    border_pix: 0 
+                # Number of pixels to exclude around each border.
+    low_rank_background: None 
+                # Whether to update the background using a low rank approximation.
+                # If False all the nonzero elements of the background components are updated using hals
+                # (to be used with one background per patch)
+    del_duplicates: False 
+                # Delete duplicate components in the overlaping regions between neighboring patches. If False
+                # then merging is used.
+    p_patch: 0 
+                # order of AR dynamics when processing within a patch
+    remove_very_bad_comps: True 
+                # Whether to remove (very) bad quality components during patch processing
+    p_ssub: 2. 
+                # Spatial downsampling factor
+    p_tsub: 2. 
+                # Temporal downsampling factor
+    memory_fact: 1 
+                # unitless number for increasing the amount of available memory
+    n_processes: 24
+                # Number of processes used for processing patches in parallel
+    in_memory: True
+                # Whether to load patches in memory
+
+# ------------------------------- preprocessing ------------------------------ #
+preproc_params:
+    noise_range: [.25, .5]
+        #   range of normalized frequencies over which to compute the PSD for noise determination
+    noise_method: 'mean'
+        #   PSD averaging method for computing the noise std
+    compute_g': False
+        #   whether to estimate global time constant
+
+    lags: 5
+        #   number of lags to be considered for time constant estimation
+    include_noise: False
+        #   flag for using noise values when estimating g
+
+
+
+# --------------------------- Initialization params -------------------------- #
+init_params:
+    K: 15
+        # number of components to be found (per patch or whole FOV depending on whether rf=None)
+    gSig: [3, 3]
+        # radius of average neurons (in pixels)
+    gSiz: [7, 7] # int(round((x * 2) + 1)) for x in gSig
+        # half-size of bounding box for each neuron
+    center_psf: True
+        # whether to use 1p data processing mode. Set to true for 1p
+
+    ssub: 1
+        # spatial downsampling factor
+    tsub: 1
+        # temporal downsampling factor
+
+    ring_size_factor: 1.5
+        # radius of ring (*gSig) for computing background during greedy_pnr
+    ssub_B: 2
+        # downsampling factor for background during greedy_pnr
+    
+    init_iter: 2
+        # number of iterations during greedy_pnr (1p) initialization
+    nIter: 5
+        # number of rank-1 refinement iterations during greedy_roi initialization
+  
+    normalize_init: True
+        # whether to equalize the movies during initialization
+
+    method_init: 'corr_pnr'
+
+    min_corr: 0.9
+        # minimum value of correlation image for determining a candidate component during greedy_pnr
+    min_pnr:  12
+        # minimum value of psnr image for determining a candidate component during greedy_pnr
+
+
+# ------------------------------ Spatial params ------------------------------ #
+spatial_params:
+    method_exp: 'dilate'
+        # method for expanding footprint of spatial components
+    dist: 3
+        # expansion factor of ellipse
+    expandCore: None
+        # morphological element for expanding footprints under dilate
+    nb: 0 # default 1
+        # number of global background components
+        #        nb= 0: Return background as b and W
+        #        nb=-1: Return full rank background B
+        #        nb<-1: Don't return background
+    update_background_components: True
+
+
+# ------------------------------ Temporal params ----------------------------- #
+temporal_params:
+    ITER: 2
+        # block coordinate descent iterations
+    method_deconvolution: 'oasis'
+        # method for solving the constrained deconvolution problem ('oasis','cvx' or 'cvxpy')
+    p: 1
+        # order of AR indicator dynamics
+   
+
+# -------------------------------- merge param ------------------------------- #
+merge_params:
+    do_merge:  True
+        # Whether or not to merge
+    thr:  0.7
+        # Trace correlation threshold for merging two components.
+    merge_parallel:  False
+        # Perform merging in parallel
+    max_merge_area: None
+        # maximum area (in pixels) of merged components, used to determine whether to merge components during fitting process
+
+
+# ------------------------- Quality evaluation params ------------------------ #
+quality_evaluation_params:
+    min_SNR: 3
+        # trace SNR threshold. Traces with SNR above this will get accepted
+    SNR_lowest: 0.5
+        # minimum required trace SNR. Traces with SNR below this will get rejected
+    rval_thr: 0.85
+        # space correlation threshold. Components with correlation higher than this will get accepted
+    rval_lowest: -1
+        # minimum required space correlation. Components with correlation below this will get rejected
+    use_cnn: False
+        # flag for using the CNN classifier.
+    min_cnn_thr: 0.9
+        # CNN classifier threshold. Components with score higher than this will get accepted
+    cnn_lowest: 0.1
+        # minimum required CNN threshold. Components with score lower than this will get rejected.
+    gSig_range: None #  list or integers
+        # gSig scale values for CNN classifier. In not None, multiple values are tested in the CNN class
+
+
+
+
+# ----------------------------- motion correction ---------------------------- #
 
 motion_correction: # adapted from here: https://github.com/flatironinstitute/CaImAn/blob/master/demos/general/demo_pipeline_cnmfE.py
-    gSig_filt: [2, 2] # used for high pass filtering in 1p data
-    strides: [30, 30] # Can make it shakey
-    overlaps: [11, 11] #
-    max_shifts: [25, 25] # max shifts in rigid. makes a difference. usually 5-8. can be larger if motion is very rigid
-    max_deviation_rigid: 7 # non-rigid shift deviation from rigid max shifts. makes a difference
-    shifts_opencv: True
-    num_frames_split: 100
+
+    border_nan: 'copy'
+        # flag for allowing NaN in the boundaries. True allows NaN, whereas 'copy' copies the value of the
+        # nearest data point.
+    gSig_filt: [3, 3]
+        # size of kernel for high pass spatial filtering in 1p data. If None no spatial filtering is performed
+
+    max_deviation_rigid: 7
+        # maximum deviation in pixels between rigid shifts and shifts of individual patches
+
+    max_shifts: [25, 25] #   (6,6)
+        # maximum shifts per dimension in pixels.
+
+        
+    niter_rig: int,  1
+        # number of iterations rigid motion correction.
+
     nonneg_movie: True
+        # flag for producing a non-negative movie.
+
+    num_frames_split: 100
+        # split movie every x frames for parallel processing
 
 
-cnmf_fit:
-    method_init: "corr_pnr"
-    method_deconvolution: 'oasis'       # could use 'cvxpy' alternatively
-    update_background_components: True  # sometimes setting to False improve the results
-    normalize_init: False               # just leave as is
-    center_psf: True                    # leave as is for 1 photon
-    del_duplicates: True               # whether to remove duplicates from initialization     
+    overlaps: [24, 24]
+        # overlap between patches in pixels in pw-rigid motion correction
+        
 
-    p: 1                        # order of the autoregressive system
-    K: 15                       # upper bound on number of components per patch, in general None
-    gSig: [2.5, 2.5]            #2.5  # gaussian width of a 2D gaussian kernel, which approximates a neuron. 
-    gSiz: [8, 8]                # average diameter of a neuron, in general 4*gSig+1. 
-    merge_thr: .6               # default 0.7. merging threshold, max correlation allowed
-    rf: 30                      # default 40. half-size of the patches in pixels. e.g., if rf=40, patches are 80x80
-    stride: 15                  # amount of overlap between the patches in pixels
-                                #   (keep it at least large as gSiz, i.e 4 times the neuron size gSig)
-    tsub: 1                         # downsampling factor in time for initialization,
-                                    #   increase if you have memory problems
-    ssub: 1                     # downsampling factor in space for initialization,
-                                    #   increase if you have memory problems
-                                    #   you can pass them here as boolean vectors
-    low_rank_background: None   # None leaves background of each patch intact,
-                                    #   True performs global low-rank approximation if gnb>0
-    nb: 0                       # number of background components (rank) if positive,
-                                    #    else exact ring model with following settings
-                                    #        gnb= 0: Return background as b and W
-                                    #        gnb=-1: Return full rank background B
-                                    #        gnb<-1: Don't return background
-    nb_patch: 0                 # number of background components (rank) per patch if gnb>0,
-                                    #     else it is set automatically
+    splits_els: 14
+        # number of splits across time for pw-rigid registration
+    splits_rig: 14
+        # number of splits across time for rigid registration
+    strides: [80, 80]
+        # how often to start a new patch in pw-rigid registration. Size of each patch will be strides + overlaps
 
-    # To select values for these use 'cm.summary_images.correlation_pn'
-    min_corr: .8                # min peak value from correlation image
-    min_pnr: 6                  # min peak to noise ration from PNR image
+    use_cuda: True
+        # flag for using a GPU.
 
-    ssub_B: 2                   # additional downsampling factor in space for background
-    ring_size_factor: 1.4       # radius of ring is gSiz*ring_size_factor
-    border_pix: 0               # number of pixels to not consider in the borders)
+
+
+
+
