@@ -102,13 +102,13 @@ def print_cnmfe_components(cnm, msg=None):
     try:
         print('Number of accepted components: ', len(cnm.estimates.idx_components))
     except :
-        print("No accepted components yet")
+        print("No accepted components yet\n")
 
 def log_cnmfe_components(cnm, msg=None):
     try:
         clean = f'Number of accepted components: {len(cnm.estimates.idx_components)}'
     except :
-        clean = "No accepted components yet"
+        clean = "No accepted components yet\n"
 
     string = f"COMPONENTS - {msg}\n" + f"'Number of total components: {len(cnm.estimates.C)}\n" + clean
     logging.info(string)

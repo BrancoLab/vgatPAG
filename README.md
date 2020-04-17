@@ -7,7 +7,7 @@ Currently working of the dev branch of caiman, install with these steps:
 Clone repository and switch to dev branch
 
 ```
-git clonehttps://github.com/flatironinstitute/CaImAn.git
+git clone https://github.com/flatironinstitute/CaImAn.git
 cd caiman
 git checkout dev
 git pull
@@ -21,12 +21,6 @@ pip install -r requirements.txt
 pip install -U ipykernel
 pip install pyqt5 napari fancylog
 pip install .
-```
-
-## Other packages
-Other packages in processing of calcium data can be installed with:
-```
-pip install napari
 ```
 
 

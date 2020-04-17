@@ -23,15 +23,7 @@ def look_at_video(filepath, rgb=False):
         viewer = napari.view_image(images, rgb=rgb)
 
 
-_cmaps = [
-    "gray",
-    "twilight", 
-    "twilight",
-    "turbo"
-]
-
-
-def compare_videos(rgb=False, contrast_limits=[120, 600], **kwargs):
+def compare_videos(rgb=False, contrast_limits=[120, 600], fps=30,  **kwargs):
     """
         Look at a number of videos side by side. 
         Depending on the number of videos and their size it might take a while to 
@@ -40,6 +32,17 @@ def compare_videos(rgb=False, contrast_limits=[120, 600], **kwargs):
         Pass a list of paths to memmapped or tiff files as kwargs, with the name of each file
         as they keyword and the path as the argument
     """
+        
+    # When comparing videos, videos will use these colormaps in order
+
+    _cmaps = [
+        "gray",
+        "twilight", 
+        "twilight",
+        "gray",
+        "turbo"
+    ]
+
 
     images = {k:load_mmapped(fp) if fp.endswith(".mmap") else napari.utils.io.magic_imread(fp) 
                         for k, fp in kwargs.items()}
@@ -59,9 +62,9 @@ def compare_videos(rgb=False, contrast_limits=[120, 600], **kwargs):
 # > example of how to sue compare videos to look at a few videos at the same time
 if __name__ == "__main__":
     fld = "D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\BF164p1\\19JUN05"
-    v1 = os.path.join(fld, '19JUN05_BF164p1_v1_ds126_crop_ffcSub_fftfilt.tif')
-    v2 = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_crop_ffcSub_fftfilt_rig__d1_109_d2_92_d3_1_order_C_frames_22662_.mmap")
-    v3 = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_crop_ffcSub_fftfilt_els__d1_109_d2_92_d3_1_order_C_frames_22662_.mmap")
+    v1 = os.path.join(fld, '19JUN05_BF164p1_v1_ds126_crop_ffcSub_div_fft.tif')
+    v2 = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_crop_ffcSub_div_fft_rig__d1_109_d2_92_d3_1_order_C_frames_22662_.mmap")
+    v3 = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_crop_ffcSub_div_fft_els__d1_109_d2_92_d3_1_order_C_frames_22662_.mmap")
+    v4 = os.path.join(fld, '19JUN05_BF164p1_v1_ds126_crop_ffcSub_d1_109_d2_92_d3_1_order_C_frames_22662_.mmap')
 
-
-    compare_videos(raw=v1, rigid_mc=v2, pw_mc=v3)
+    compare_videos(raw=v1, rigid_mc=v2, pw_mc=v3, raw_mc=v4,  contrast_limits=None)
