@@ -1,0 +1,20 @@
+# Metadata to keep track of what's what throughout the analysis
+
+# --------------------------- Before preprocessing --------------------------- #
+experimenter: 'Federico'
+fld: 'D:\Dropbox (UCL - SWC)\Project_vgatPAG\analysis\doric\BF164p1\19JUN05' # folder of the session being analysed
+
+raw_video: '19JUN05_BF164p1_v1_ds126_crop_raw.tif'
+ffcsub_video: '19JUN05_BF164p1_v1_ds126_crop_ffcSub.tiff'
+
+ffcsub_param:
+    sigma: 25
+    mean: 'each_frames_video'
+
+# --------------------------- For motion correction -------------------------- #
+video_for_mc: None # what video to use for mc
+
+preprocessing_for_mc:  # what was done to the video used for motion correction
+    crop: True
+    ffcSub: True
+    fft_bandpass: True

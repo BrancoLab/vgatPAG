@@ -59,9 +59,9 @@ def compare_videos(rgb=False, contrast_limits=[120, 600], **kwargs):
 # > example of how to sue compare videos to look at a few videos at the same time
 if __name__ == "__main__":
     fld = "D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\BF164p1\\19JUN05"
-    v1 = os.path.join(fld, '19JUN05_BF164p1_v1_ds126_crop_ffcSub.tiff')
-    v2 = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_crop_ffcSub_rig__d1_109_d2_92_d3_1_order_C_frames_22662_.mmap")
-    v3 = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_crop_ffcSub_els__d1_109_d2_92_d3_1_order_C_frames_22662_.mmap")
+    v1 = os.path.join(fld, '19JUN05_BF164p1_v1_ds126_crop_ffcSub_fftfilt.tif')
+    v2 = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_crop_ffcSub_fftfilt_rig__d1_109_d2_92_d3_1_order_C_frames_22662_.mmap")
+    v3 = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_crop_ffcSub_fftfilt_els__d1_109_d2_92_d3_1_order_C_frames_22662_.mmap")
 
 
     compare_videos(raw=v1, rigid_mc=v2, pw_mc=v3)

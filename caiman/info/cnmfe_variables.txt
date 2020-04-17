@@ -1,0 +1,74 @@
+JUST SOME NOTES ON CNMF-E.estimates [class attributs of cnmfe.estimates]:
+[https://github.com/flatironinstitute/CaImAn/blob/master/caiman/source_extraction/cnmf/estimates.py]
+
+
+
+
+A:  scipy.sparse.csc_matrix (dimensions: # of pixels x # components)
+    set of spatial footprints. Each footprint is represented in a column of A, flattened with order = 'F'
+
+C:  np.ndarray (dimensions: # of components x # of timesteps)
+    set of temporal traces (each row of C corresponds to a trace)
+
+f:  np.ndarray (dimensions: # of background components x # of timesteps)
+    set of temporal background components
+
+b:  np.ndarray or scipy.sparse.csc_matrix (dimensions: # of pixels x # of background components)
+    set of spatial background components, flattened with order = 'F'
+
+R:  np.ndarray (dimensions: # of components x # of timesteps)
+    set of trace residuals
+
+YrA:    np.ndarray (dimensions: # of components x # of timesteps)
+    set of trace residuals
+
+S:  np.ndarray (dimensions: # of components x # of timesteps)
+    set of deconvolved neural activity traces
+
+F_dff:  np.ndarray (dimensions: # of components x # of timesteps)
+    set of DF/F normalized activity traces (only for 2p)
+
+W:  scipy.sparse.coo_matrix (dimensions: # of pixels x # of pixels)
+    Ring model matrix (used in 1p processing with greedy_pnr for background computation)
+
+b0: np.ndarray (dimensions: # of pixels)
+    constant baseline for each pixel
+
+sn: np.ndarray (dimensions: # of pixels)
+    noise std for each pixel
+
+g:  list (length: # of components)
+    time constants for each trace
+
+bl: list (length: # of components)
+    constant baseline for each trace
+
+c1: list (length: # of components)
+    initial value for each trace
+
+neurons_sn: list (length: # of components)
+    noise std for each trace
+
+center: list (length: # of components)
+    centroid coordinate for each spatial footprint
+
+coordinates: list (length: # of components)
+    contour plot for each spatial footprint
+
+idx_components: list
+    indices of accepted components
+
+idx_components_bad: list
+    indices of rejected components
+
+SNR_comp: np.ndarray
+    trace SNR for each component
+
+r_values: np.ndarray
+    space correlation for each component
+
+cnn_preds: np.ndarray
+    CNN predictions for each component
+
+ecc: np.ndarray
+    eccentricity values

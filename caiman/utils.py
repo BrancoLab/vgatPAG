@@ -45,6 +45,7 @@ def load_fit_cnfm_and_data(fld, n_processes, dview, mc_type="els"):
     check_file_exists(model_filepath, raise_error=True)
 
     cnm = load_fit_cnfm(model_filepath, n_processes, dview)
+    cnm.estimates.dims = cnm.dims
 
     # Get motion corrected files
     rigid_mc, pw_mc = get_mc_files_from_fld(fld)
@@ -69,6 +70,18 @@ def load_fit_cnfm_and_data(fld, n_processes, dview, mc_type="els"):
     cn_filter, pnr = cm.summary_images.correlation_pnr(images, gSig=cnm.params.init['gSig'][0], swap_dim=False) 
 
     return cnm, model_filepath, Yr, dims, T, images, smooth_bg, cn_filter, pnr
+
+
+def load_tiff_video_caiman(videofile):
+    check_file_exists(videofile, raise_error=True)
+    return cm.load(videofile)
+
+def load_mmap_video_caiman(videofile):
+    check_file_exists(videofile, raise_error=True)
+
+    Yr, dims, T = cm.load_memmap(videofile)
+    images = Yr.T.reshape((T,) + dims, order='F')
+    return Yr, dims, T, images
 
 
 # ------------------------------- Params utils ------------------------------- #

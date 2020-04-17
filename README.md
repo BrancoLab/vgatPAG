@@ -1,6 +1,8 @@
 # vgatPAG
 
-currently working of the dev branch of caiman, install with these steps:
+
+## Setup for Caiman
+Currently working of the dev branch of caiman, install with these steps:
 
 Clone repository and switch to dev branch
 
@@ -21,12 +23,16 @@ pip install pyqt5 napari fancylog
 pip install .
 ```
 
+## Other packages
+Other packages in processing of calcium data can be installed with:
+```
+pip install napari
+```
 
 
-Analysis of Calcium data from miniscope recordings in the vgatPAG project. 
+## Other packages for behaviour analysis
 
-
-Requires Behaviour and fcutils packages, install with:
+Requires Behaviour and fcutils packages [written by Federico and available on github], install with:
 
 ```
 pip install git+https://github.com/BrancoLab/Behaviour.git --upgrade
