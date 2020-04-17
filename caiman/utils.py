@@ -15,26 +15,9 @@ from caiman.source_extraction.cnmf.cnmf import load_CNMF
 def load_fit_cnfm(model_path, n_processes, dview):
     return load_CNMF(model_path, n_processes=n_processes, dview=dview)   
 
-def get_mc_files_from_fld(fld):
-    # Get motion corrected files
-    rigid_mc = [f for f in listdir(fld) if "_rig__" in f and f.endswith("_.mmap") 
-                        and "_order_C" in f and "d2" in f and "d1" in f]
-
-    pw_mc = [f for f in listdir(fld) if "_els__" in f and f.endswith("_.mmap") 
-                        and "_order_C" in f and "d2" in f and "d1" in f]
-    
-    if len(rigid_mc) > 1 or len(pw_mc) > 1:
-        raise ValueError("Found too many files!")
-    elif not rigid_mc or not pw_mc:
-        raise ValueError("didn't find enough files")
-    else:
-        rigid_mc = rigid_mc[0]
-        pw_mc = pw_mc[0]
-
-    return rigid_mc, pw_mc
 
 
-def load_fit_cnfm_and_data(fld, n_processes, dview, mc_type="els"):
+def load_fit_cnmfe(fld, n_processes, dview):
     """
         Loads a saved CNMF-E model and necessary data from a mouse's folder
     """
@@ -47,29 +30,7 @@ def load_fit_cnfm_and_data(fld, n_processes, dview, mc_type="els"):
     cnm = load_fit_cnfm(model_filepath, n_processes, dview)
     cnm.estimates.dims = cnm.dims
 
-    # Get motion corrected files
-    rigid_mc, pw_mc = get_mc_files_from_fld(fld)
-
-    if mc_type == "els":
-        video = pw_mc
-    elif mc_type == "rig":
-        video = rigid_mc
-    else:
-        raise ValueError("Unrecognized mc type argument")
-
-    # Load memmapped motion corrected video
-    Yr, dims, T = cm.load_memmap(video)
-    images = Yr.T.reshape((T,) + dims, order='F')
-
-    # Create a smoothed bg frame 
-    kernel = np.ones((5,5),np.float32)
-    bg = np.median(images, axis=0)
-    smooth_bg = cv2.filter2D(bg, -1, kernel)
-
-    # Get filtered and peak over noise ratio images
-    cn_filter, pnr = cm.summary_images.correlation_pnr(images, gSig=cnm.params.init['gSig'][0], swap_dim=False) 
-
-    return cnm, model_filepath, Yr, dims, T, images, smooth_bg, cn_filter, pnr
+    return cnm, model_filepath
 
 
 def load_tiff_video_caiman(videofile):
@@ -148,7 +109,7 @@ def plot_components_over_image(img, ax, coords, lw, good_components, cmap="virid
     """
 
     # Display image
-    ax.imshow(img, cmap=cmap)
+    plotted_img = ax.imshow(img, cmap=cmap)
 
     # Plot contours and component id
     for c in coords:
@@ -166,3 +127,5 @@ def plot_components_over_image(img, ax, coords, lw, good_components, cmap="virid
         ax.plot(*c['coordinates'].T, c=color, lw=lw)
         ax.scatter(c['CoM'][1], c['CoM'][0], s=400, color='k', zorder=80)
         ax.text(c['CoM'][1]-1, c['CoM'][0]+1, str(c['neuron_id']), color='w', zorder=99)
+
+    return plotted_img

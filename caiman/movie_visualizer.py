@@ -23,7 +23,7 @@ def look_at_video(filepath, rgb=False):
         viewer = napari.view_image(images, rgb=rgb)
 
 
-def compare_videos(rgb=False, contrast_limits=[120, 600], fps=30,  **kwargs):
+def compare_videos(rgb=False, contrast_limits=[120, 600], fps=30, notebook=True,  **kwargs):
     """
         Look at a number of videos side by side. 
         Depending on the number of videos and their size it might take a while to 
@@ -48,7 +48,7 @@ def compare_videos(rgb=False, contrast_limits=[120, 600], fps=30,  **kwargs):
                         for k, fp in kwargs.items()}
     if not images: return
 
-    with napari.gui_qt():
+    if notebook:
         v = napari.Viewer(ndisplay=2)
 
         for n, (ttl, imgs) in enumerate(images.items()):
@@ -56,6 +56,15 @@ def compare_videos(rgb=False, contrast_limits=[120, 600], fps=30,  **kwargs):
             v.add_image(imgs, name=ttl, colormap=_cmaps[n], contrast_limits=contrast_limits)
 
         v.grid_view(n_column=len(list(images.keys())))
+    else:
+        with napari.gui_qt():
+            v = napari.Viewer(ndisplay=2)
+
+            for n, (ttl, imgs) in enumerate(images.items()):
+                print(f"Loading data for movie: {ttl}")
+                v.add_image(imgs, name=ttl, colormap=_cmaps[n], contrast_limits=contrast_limits)
+
+            v.grid_view(n_column=len(list(images.keys())))
 
 
 
