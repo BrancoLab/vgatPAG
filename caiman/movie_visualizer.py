@@ -38,6 +38,7 @@ def compare_videos(rgb=False, contrast_limits=[120, 600], fps=30, notebook=True,
     _cmaps = [
         "gray",
         "gray",
+        "gray",
         "twilight", 
         "twilight",
         "gray",
@@ -72,8 +73,8 @@ def compare_videos(rgb=False, contrast_limits=[120, 600], fps=30, notebook=True,
 # > example of how to sue compare videos to look at a few videos at the same time
 if __name__ == "__main__":
     fld = "D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\BF164p1\\19JUN05"
-    raw = os.path.join(fld, '19JUN05_BF164p1_v1_ds126_ffcSub.tif')
-    mcraw = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_ffcSub_d1_126_d2_126_d3_1_order_C_frames_22662_.mmap")
+    raw = os.path.join(fld, '19JUN05_BF164p1_fullrestest_ffcSub.tif')
+    mcraw = os.path.join(fld, "19JUN05_BF164p1_fullrestest_ffcSub_d1_630_d2_630_d3_1_order_C_frames_1988_.mmap")
     # v3 = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_crop_ffcSub_div_fft_els__d1_109_d2_92_d3_1_order_C_frames_22662_.mmap")
     # v4 = os.path.join(fld, '19JUN05_BF164p1_v1_ds126_crop_ffcSub_d1_109_d2_92_d3_1_order_C_frames_22662_.mmap')
 
