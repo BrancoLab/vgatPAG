@@ -14,13 +14,13 @@ def load_mmapped(filepath):
     return images
 
 
-def look_at_video(filepath, rgb=False):
+def look_at_video(filepath, rgb=False, cmap="gray"):
     # Use this function to look at a single video in napari
     # filepath should be path to memmapped file
     images = load_mmapped(filepath)
 
     with napari.gui_qt():
-        viewer = napari.view_image(images, rgb=rgb)
+        viewer = napari.view_image(images, rgb=rgb, colormap=cmap)
 
 
 def compare_videos(rgb=False, contrast_limits=[120, 600], fps=30, notebook=True,  **kwargs):
@@ -36,6 +36,7 @@ def compare_videos(rgb=False, contrast_limits=[120, 600], fps=30, notebook=True,
     # When comparing videos, videos will use these colormaps in order
 
     _cmaps = [
+        "gray",
         "gray",
         "twilight", 
         "twilight",
@@ -71,9 +72,9 @@ def compare_videos(rgb=False, contrast_limits=[120, 600], fps=30, notebook=True,
 # > example of how to sue compare videos to look at a few videos at the same time
 if __name__ == "__main__":
     fld = "D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\BF164p1\\19JUN05"
-    v1 = os.path.join(fld, '19JUN05_BF164p1_v1_ds126_crop_ffcSub_div_fft.tif')
-    v2 = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_crop_ffcSub_div_fft_rig__d1_109_d2_92_d3_1_order_C_frames_22662_.mmap")
-    v3 = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_crop_ffcSub_div_fft_els__d1_109_d2_92_d3_1_order_C_frames_22662_.mmap")
-    v4 = os.path.join(fld, '19JUN05_BF164p1_v1_ds126_crop_ffcSub_d1_109_d2_92_d3_1_order_C_frames_22662_.mmap')
+    raw = os.path.join(fld, '19JUN05_BF164p1_v1_ds126_ffcSub.tif')
+    mcraw = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_ffcSub_d1_126_d2_126_d3_1_order_C_frames_22662_.mmap")
+    # v3 = os.path.join(fld, "19JUN05_BF164p1_v1_ds126_crop_ffcSub_div_fft_els__d1_109_d2_92_d3_1_order_C_frames_22662_.mmap")
+    # v4 = os.path.join(fld, '19JUN05_BF164p1_v1_ds126_crop_ffcSub_d1_109_d2_92_d3_1_order_C_frames_22662_.mmap')
 
-    compare_videos(raw=v1, rigid_mc=v2, pw_mc=v3, raw_mc=v4,  contrast_limits=None)
+    compare_videos(raw=raw, mcraw=mcraw, contrast_limits=None, notebook=False)
