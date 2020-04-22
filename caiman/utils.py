@@ -97,7 +97,7 @@ def start_server(n_processes=24):
 
 
 # --------------------------------- Plotters --------------------------------- #
-def plot_components_over_image(img, ax, coords, lw, good_components, cmap="viridis", only=None):
+def plot_components_over_image(img, ax, coords, lw, good_components, bad_components, cmap="viridis", only=None, alpha=1):
     """
         Plot the ROIs contours over an iamge to visualise the spatial location of the ROIs
 
@@ -115,8 +115,10 @@ def plot_components_over_image(img, ax, coords, lw, good_components, cmap="virid
     for c in coords:
         if c['neuron_id'] in good_components:
             color = 'g'
-        else:
+        elif c['neuron_id'] in bad_components:
             color = 'r'
+        else:
+            color = 'b'
 
         if only is not None:
             if c['neuron_id'] in good_components and only != "good":
@@ -124,8 +126,8 @@ def plot_components_over_image(img, ax, coords, lw, good_components, cmap="virid
             elif c['neuron_id'] not in good_components and only != "bad":
                 continue
 
-        ax.plot(*c['coordinates'].T, c=color, lw=lw)
-        ax.scatter(c['CoM'][1], c['CoM'][0], s=400, color='k', zorder=80)
+        ax.plot(*c['coordinates'].T, c=color, lw=lw, alpha=alpha)
+        ax.scatter(c['CoM'][1], c['CoM'][0], s=225, color=color, edgecolor=None, zorder=80, alpha=.6)
         ax.text(c['CoM'][1]-1, c['CoM'][0]+1, str(c['neuron_id']), color='w', zorder=99)
 
     return plotted_img
