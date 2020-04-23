@@ -9,7 +9,7 @@ Clone repository and switch to dev branch
 ```
 git clone https://github.com/flatironinstitute/CaImAn.git
 cd caiman
-git checkout dev
+git checkout -b 1p_rt
 git pull
 ```
 
@@ -20,7 +20,7 @@ conda activate cai
 pip install -r requirements.txt
 pip install -U ipykernel
 pip install pyqt5 napari fancylog
-pip install .
+pip install . --user
 ```
 
 
