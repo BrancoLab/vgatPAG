@@ -17,14 +17,21 @@ def load_fit_cnfm(model_path, n_processes, dview):
 
 
 
-def load_fit_cnmfe(fld, n_processes, dview):
+def load_fit_cnmfe(fld, n_processes, dview, raw=False, curated=False):
     """
         Loads a saved CNMF-E model and necessary data from a mouse's folder
     """
     check_create_folder(fld, raise_error=True)
 
     # Load CNMF-E model
-    model_filepath = os.path.join(fld, "cnmfe_fit.hdf5")
+    name = "cnmfe_fit"
+    if raw:
+        name += "_raw"
+    if curated:
+        name += "_curated"
+
+
+    model_filepath = os.path.join(fld, name+".hdf5")
     check_file_exists(model_filepath, raise_error=True)
 
     cnm = load_fit_cnfm(model_filepath, n_processes, dview)
