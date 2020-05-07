@@ -121,11 +121,11 @@ def plot_components_over_image(img, ax, coords, lw, good_components, bad_compone
     # Plot contours and component id
     for c in coords:
         if c['neuron_id']-1 in good_components:
-            color = 'g'
+            color = 'b'
         elif c['neuron_id']-1 in bad_components:
             color = 'r'
         else:
-            color = 'b'
+            color = 'g'
 
         if only is not None:
             if c['neuron_id'] in good_components and only != "good":
