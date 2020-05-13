@@ -42,6 +42,8 @@ for mouse in mice:
         roi_ids, roi_sigs, nrois = Roi().get_sessions_rois(sess)
         roi_ids = list(roi_ids.values())[0]
 
+        raise NotImplementedError('Cehck roi_inspectr.ipynb for improved data fetching')
+
         # Loop over each ROI
         print(f"Mouse {mouse} - session: {sess} - [{len(roi_ids)} rois]")
         for n in tqdm(range(list(nrois.values())[0])):

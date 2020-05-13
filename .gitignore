@@ -5,6 +5,9 @@
 *.mp4
 *.csv
 *.pkl
+*.png
+*.svg
+*.jpg
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

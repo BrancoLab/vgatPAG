@@ -38,6 +38,7 @@ def get_mouse_session_subdirs(mouse):
         return get_subdirs(folders[0])
 
 def get_session_folder(mouse=None, sess_name=None, **kwargs):
+    if mouse is None or sess_name is None: raise ValueError
     mouse_flds = get_mouse_session_subdirs(mouse)
     sess_fld = [fld for fld in mouse_flds if sess_name in fld]
     if len(sess_fld) != 1:
@@ -129,8 +130,8 @@ class Recording(dj.Imported): #  In each session there might be multiple recordi
             manual_insert_skip_duplicate(self, rkey)
 
 
-    def get_sessions_recordings(self, sess_name):
-        return (self & f"sess_name='{sess_name}'").fetch("rec_name")
+    def get_sessions_recordings(self, mouse, sess_name):
+        return (self & f"sess_name='{sess_name}'" & f"mouse='{mouse}'").fetch("rec_name")
 
     def get_recording_fps(self, **kwargs):
         return (self & kwargs).fetch1("fps_behav")
@@ -154,6 +155,15 @@ class Recording(dj.Imported): #  In each session there might be multiple recordi
         astims = [s for s in astims if s not in vstims] # for some reason some are repeated
 
         return vstims, astims
+
+    def get_session_first_stim(self, mouse, session):
+        vstims = (VisualStimuli & f"sess_name='{session}'" & f"mouse='{mouse}'").fetch("frame")
+        astims = (AudioStimuli & f"sess_name='{session}'" & f"mouse='{mouse}'").fetch("frame")
+        if not len(vstims) and not len(astims):
+            return 0
+        else:
+            return np.min(np.hstack([vstims, astims]))
+        
 
 
 
@@ -352,26 +362,95 @@ class TiffTimes(dj.Imported):
         is_ca_recording: longblob    # 1 when Ca recording on, 0 otherwise
         starts: longblob
         ends: longblob
+        --- 
+        camera_frames: longblob
+        microscope_frames: longblob
     """
+
+    sampling_frequency = 10000
+
     def _make_tuples(self, key):
         session_fld = get_session_folder(**key)
+        fps = (Recording & key).fetch1('fps_behav')
 
-        fl = [f for f in listdir(session_fld) if 'tifflengths.npy' in f][0]
-        start_times = np.load(fl)
-
+        # Load recordings AI file
         aifile = (Recording & key).fetch1("aifile")
         f, keys, subkeys, allkeys = open_hdf(os.path.join(session_fld, aifile))
 
-        roi_data = f['CRaw_ROI_1'][()]
-        signal = np.ones_like(roi_data)
-        signal[derivative(roi_data )== 0] = 0
+        # Get the start and end time in behaviour frames
+        camera_triggers = f['AI']['0'][()] 
+        microscope_triggers = f['AI']['1'][()] 
 
-        starts, ends = get_times_signal_high_and_low(signal, th=.5)
-        if len(starts) != len(ends) or starts[0] > ends[0]: raise ValueError
+        starts, ends = get_times_signal_high_and_low(microscope_triggers)
+        cam_starts, cam_ends = get_times_signal_high_and_low(camera_triggers)
+        
+
+        
+        # Get the start end time of recording in sample numbers
+        n_frames = len(camera_triggers)
+        status = 'low'
+        idx = 0
+        startends = [] # will store tuples with start and end of each recording
+        pair = []
+        itern = 0
+        while idx < n_frames:
+            itern += 1
+            if itern > 27027912: break
+            if idx > 27027912: break
+
+            if status == 'low':
+                # Go to next frame start
+                try:
+                    idx = starts[starts > idx][0]
+                except:
+                    break # we've reached the end
+                
+                # Keep track of stuff
+                pair.append(idx)
+                status = 'high'
+
+            elif status == 'high':
+                # Go to next end frame
+                try:
+                    idx = ends[ends > idx][0]
+                except :
+                    # We've reached the end
+                    break
+
+                # look at the time after the frame to see if there's 30s of silence
+                after = microscope_triggers[idx: idx + 300 * self.sampling_frequency]
+
+                if np.std(after)  <= .1:
+                    pair.append(idx)
+                    startends.append(tuple(pair.copy()))
+                    pair = []
+                    status = 'low'
+
+                    
+        # makes signal be 1 when recording is on
+        signal = np.zeros_like(camera_triggers) # This is used just for double checking that everything went well by plotting
+        for start, stop in startends:
+            signal[start:stop] = 1
+
+        # Go from sample number to frame numbers
+        def smpl2frm(val):
+            return np.int32(round((val / self.sampling_frequency) * fps))
+        
+        startends = [(smpl2frm(s), smpl2frm(e)) for s,e in startends]
+
+        # Get is recording
+        roi_data = f['CRaw_ROI_1'][()]
+        is_recording = np.zeros_like(roi_data)
+
+        for start, end in startends:
+            is_recording[start:end] = 1
         
         key['is_ca_recording'] = signal
-        key['starts'] = starts
-        key['ends'] = ends
+        key['starts'] = np.array([s for s,e in startends])
+        key['ends'] = np.array([e for s,e in startends])
+        key['camera_frames'] = camera_triggers
+        key['microscope_frames'] = camera_triggers
+
         manual_insert_skip_duplicate(self, key)
 
 
@@ -430,11 +509,11 @@ class Roi(dj.Imported):
         nrois = len(roi_ids)
         return roi_ids, roi_sigs, nrois
 
-    def get_sessions_rois(self, sess_name):
-        recs = Recording().get_sessions_recordings(sess_name)
-        roi_ids = {r:self.get_recordings_rois(sess_name=sess_name, rec_name=r)[0] for r in recs}
-        roi_sigs = {r:self.get_recordings_rois(sess_name=sess_name, rec_name=r)[1] for r in recs}
-        nrois = {r:self.get_recordings_rois(sess_name=sess_name, rec_name=r)[2] for r in recs}
+    def get_sessions_rois(self, mouse, sess_name):
+        recs = Recording().get_sessions_recordings(mouse, sess_name)
+        roi_ids = {r:self.get_recordings_rois(mouse_name=mouse, sess_name=sess_name, rec_name=r)[0] for r in recs}
+        roi_sigs = {r:self.get_recordings_rois(mouse_name=mouse, sess_name=sess_name, rec_name=r)[1] for r in recs}
+        nrois = {r:self.get_recordings_rois(mouse_name=mouse, sess_name=sess_name, rec_name=r)[2] for r in recs}
         return roi_ids, roi_sigs, nrois
 
 
