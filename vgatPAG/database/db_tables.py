@@ -4,7 +4,7 @@ import datetime
 import numpy as np
 import os
 from scipy.signal import medfilt as median_filter
-
+import matplotlib.pyplot as plt
 
 
 from behaviour.tracking.tracking import prepare_tracking_data, compute_body_segments
@@ -384,53 +384,34 @@ class TiffTimes(dj.Imported):
         starts, ends = get_times_signal_high_and_low(microscope_triggers)
         cam_starts, cam_ends = get_times_signal_high_and_low(camera_triggers)
         
-
-        
         # Get the start end time of recording in sample numbers
-        n_frames = len(camera_triggers)
-        status = 'low'
-        idx = 0
-        startends = [] # will store tuples with start and end of each recording
-        pair = []
-        itern = 0
-        while idx < n_frames:
-            itern += 1
-            if itern > 27027912: break
-            if idx > 27027912: break
+        print('\nExactring start end of individual recordings')
+        rec_starts = [starts[0]] + [starts[s] for s in  list(np.where(derivative(starts) > self.sampling_frequency)[0])]
+        rec_ends = []
 
-            if status == 'low':
-                # Go to next frame start
-                try:
-                    idx = starts[starts > idx][0]
-                except:
-                    break # we've reached the end
-                
-                # Keep track of stuff
-                pair.append(idx)
-                status = 'high'
+        for rs in rec_starts:
+            _ends = np.array([e for e in ends if e>rs])
+            try:
+                nxt = np.where(derivative(_ends)>self.sampling_frequency)[0][0]
+                rec_ends.append(_ends[nxt-1])
+            except:
+                rec_ends.append(ends[-1])
+        
+        if len(rec_ends) != len(rec_starts):
+            raise ValueError('Something went wrong')
+        startends = [(s, e) for s,e in zip(rec_starts, rec_ends)]
 
-            elif status == 'high':
-                # Go to next end frame
-                try:
-                    idx = ends[ends > idx][0]
-                except :
-                    # We've reached the end
-                    break
-
-                # look at the time after the frame to see if there's 30s of silence
-                after = microscope_triggers[idx: idx + 300 * self.sampling_frequency]
-
-                if np.std(after)  <= .1:
-                    pair.append(idx)
-                    startends.append(tuple(pair.copy()))
-                    pair = []
-                    status = 'low'
 
                     
         # makes signal be 1 when recording is on
         signal = np.zeros_like(camera_triggers) # This is used just for double checking that everything went well by plotting
         for start, stop in startends:
             signal[start:stop] = 1
+
+        _, ax = plt.subplots()
+        ax.plot(microscope_triggers)
+        ax.plot(signal)
+        plt.show()
 
         # Go from sample number to frame numbers
         def smpl2frm(val):

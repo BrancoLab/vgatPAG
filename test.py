@@ -2,7 +2,9 @@ from vgatPAG.database.db_tables import TiffTimes
 import matplotlib.pyplot as plt
 import numpy as np
 
-TiffTimes.populate()
+TiffTimes.populate(display_progress=True)
+
+
 
 # import matplotlib.pyplot as plt
 
@@ -30,7 +32,7 @@ TiffTimes.populate()
         
         
         # signal = np.zeros_like(roi_data)
-        # status = 'low'
+        # status = 'low'5
         # idx = 0
         # startends = [] # will store tuples with start and end of each recording
         # pair = []
