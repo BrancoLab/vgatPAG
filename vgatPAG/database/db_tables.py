@@ -408,10 +408,10 @@ class TiffTimes(dj.Imported):
         for start, stop in startends:
             signal[start:stop] = 1
 
-        _, ax = plt.subplots()
-        ax.plot(microscope_triggers)
-        ax.plot(signal)
-        plt.show()
+        # _, ax = plt.subplots()
+        # ax.plot(microscope_triggers)
+        # ax.plot(signal)
+        # plt.show()
 
         # Go from sample number to frame numbers
         def smpl2frm(val):
@@ -426,7 +426,7 @@ class TiffTimes(dj.Imported):
         for start, end in startends:
             is_recording[start:end] = 1
         
-        key['is_ca_recording'] = signal
+        key['is_ca_recording'] = is_recording
         key['starts'] = np.array([s for s,e in startends])
         key['ends'] = np.array([e for s,e in startends])
         key['camera_frames'] = camera_triggers

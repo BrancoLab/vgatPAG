@@ -2,6 +2,7 @@ from vgatPAG.database.db_tables import TiffTimes
 import matplotlib.pyplot as plt
 import numpy as np
 
+# TiffTimes.drop()
 TiffTimes.populate(display_progress=True)
 
 
