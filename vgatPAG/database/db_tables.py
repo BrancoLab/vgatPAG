@@ -138,6 +138,11 @@ class Recording(dj.Imported): #  In each session there might be multiple recordi
 
     def get_recording_stimuli_clean(self, **kwargs):
         # kwargs should have info about: sess_name, mouse, rec_name
+        if not 'sess_name' in kwargs.keys() or\
+                not 'mouse' in kwargs.keys() or\
+                    not 'rec_name' in kwargs.keys():
+                    raise ValueError('Not enough inputs')
+
         # Get recording's fps
         fps = self.get_recording_fps(**kwargs)
         min_frames_betweeen_stimuli = self.min_time_between_stims * fps

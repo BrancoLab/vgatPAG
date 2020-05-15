@@ -69,6 +69,10 @@ class NaiveBayes:
 
         # Make sure that every class has as many row as the rarest
         nsamples = len(data.loc[data.category == rarest])
+
+        if nsamples < 10000:
+            raise ValueError('Not enough data left sorry')
+
         dfs = []
         for label in model.keys():
             subdata = data.loc[data.category == label].reset_index(drop=True)
@@ -198,7 +202,8 @@ class NaiveBayes:
         # Just to double check
         maxproba = np.max(list(probabilities.values()))
         if maxproba != probabilities[predicted_class]:
-            raise ValueError('Something went wrong with get row prediction')
+            raise ValueError('Something went wrong with get row prediction:\n'+
+                    f'predicted: {predicted_class} - maxproba {maxproba} - probabilities {probabilities[predicted_class]}')
 
         return predicted_class
 

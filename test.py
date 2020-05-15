@@ -1,75 +1,60 @@
-from vgatPAG.database.db_tables import TiffTimes
-import matplotlib.pyplot as plt
+# %%
+from vgatPAG.database.db_tables import *
+from vgatPAG.analysis.utils import get_mouse_session_data, get_session_stimuli_frames, get_shelter_threat_trips
+
 import numpy as np
+import pandas as pd
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+import seaborn as sns
+from random import choices
 
-# TiffTimes.drop()
-TiffTimes.populate(display_progress=True)
+from behaviour.utilities.signals import get_times_signal_high_and_low
 
+from brainrender.colors import colorMap
 
+from fcutils.plotting.plot_elements import plot_shaded_withline
+from fcutils.plotting.plot_distributions import plot_kde
+from fcutils.plotting.colors import *
+from fcutils.plotting.utils import save_figure, clean_axes
 
-# import matplotlib.pyplot as plt
+# Get all mice
+mice = Mouse.fetch("mouse")
 
-# f, ax = plt.subplots()
+# Get all sessions
+sessions = {m:(Session & f"mouse='{m}'").fetch("sess_name") for m in mice}
 
-# ax.plot(microscope_triggers)
+# Get the recordings for each session
+recordings = {m:{s:(Recording & f"sess_name='{s}'" & f"mouse='{m}'").fetch(as_dict=True) for s in sessions[m]} for m in mice}
 
-# for start, stop in startends:
-#     ax.axvline(start, color='red')
-#     ax.axvline(stop, color='green')
-# ax.set(xlim=[0, 27028012])
-# plt.show()
+mouse = mice[0]
+sess = sessions[mouse][0]
+recs = Recording().get_sessions_recordings(mouse, sess)
 
-        # starts, ends = get_times_signal_high_and_low(microscope_triggers)
-        # starts = (starts / self.sampling_frequency * fps) # .astype(np.int64)
-        # ends = (ends / self.sampling_frequency * fps) # .astype(np.int64)
+print(recs)
 
-        # cam_starts, cam_ends = get_times_signal_high_and_low(camera_triggers)
-        # cam_starts = (cam_starts / self.sampling_frequency * fps).astype(np.int64)
-        # cam_ends = (cam_ends / self.sampling_frequency * fps).astype(np.int64)
-        
-        # # Get an example ROI signals
-        # roi_data = f['CRaw_ROI_1'][()]
-        # n_frames = len(roi_data)
-        
-        
-        # signal = np.zeros_like(roi_data)
-        # status = 'low'5
-        # idx = 0
-        # startends = [] # will store tuples with start and end of each recording
-        # pair = []
-        # itern = 0
-        # while idx < n_frames:
-        #     itern += 1
-        #     if itern > n_frames: break
+# Make figure 
+f, axarr = plt.subplots(ncols=6, nrows=6, figsize=(18, 9), sharex=True)
+f.suptitle('RED: shelter to threat - BLUE: threat to shelter')
+axarr = axarr.flatten()
 
-        #     if status == 'low':
-        #         # Go to next frame start
-        #         idx = starts[starts > idx][0]
-                
-        #         # Keep track of stuff
-        #         pair.append(idx)
-        #         status = 'high'
+# Get tracking
+tracking, ang_vel, speed, shelter_distance, signals, _nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
+speed[speed>np.nanpercentile(speed, 99)] = np.nanpercentile(speed, 99)
 
-                
+stimuli = get_session_stimuli_frames(mouse, sess)
 
-        #     elif status == 'high':
-        #         # Go to next end frame
-        #         try:
-        #             idx = ends[ends > idx][0]
-        #         except :
-        #             # We've reached the end
-        #             break
+for nroi in np.arange(_nrois):
+    trace = pd.DataFrame(dict(
+            x = np.int64(tracking['x'].values),
+            x_speed = derivative(tracking.x.values),
+            y = np.int64(tracking['y'].values),
+            s =speed,
+            sig = signals[nroi],
+            isrec = is_rec,
+        )).interpolate()
 
-
-        #         # look at the time after the frame to see if there's 30s of silence
-        #         sample_idx = np.int32(((idx+1) / fps) * self.sampling_frequency)
-        #         after = microscope_triggers[sample_idx: sample_idx + 30 * self.sampling_frequency]
-
-        #         if np.std(after)  <= .1:
-        #             pair.append(idx)
-        #             startends.append(tuple(pair.copy()))
-        #             print('Added pair: ', pair)
-        #             pair = []
-        #             status = 'low'
-                    
-        # a = 1
+    # Get the shelter->threat and threat-> shelter trips
+    shelter_to_threat, threat_to_shelter = get_shelter_threat_trips(trace, stimuli=stimuli, min_frames_after_stim=10000*30)
+    print(threat_to_shelter)

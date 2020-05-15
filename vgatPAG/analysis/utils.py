@@ -3,7 +3,37 @@ import numpy as np
 from vgatPAG.database.db_tables import *
 
 
+
+def get_session_stimuli_frames(mouse, sess):
+    """
+        Returns the frame number of each stimulus within one experiment
+        When >1 recordings where done within the same experiment
+        it returns the comulative frame number (i.e. the frame
+        number from the start of the first recording not from the
+        the strt of the recording the stim happend in).
+        So it works well with get_mouse_session_data below.
+    """
+    recs = Recording().get_sessions_recordings(mouse, sess)
+
+    cum_nframes = 0
+    stims = []
+    for rec in recs:
+        kwargs = dict(sess_name=sess, mouse=mouse, rec_name = rec)
+        
+        stimuli = Recording().get_recording_stimuli_clean(**kwargs)
+        stims.extend([s+cum_nframes for s in stimuli[0]+stimuli[1]])
+
+        nframes = (Recording & kwargs).fetch1('n_frames')
+        cum_nframes += nframes
+
+    return stims
+
+
 def get_mouse_session_data(mouse, session, sessions):
+    """
+        Fetches tracking and calcium data for one mouse in one experiment
+        concatenating across all recordings within that session.
+    """
     if session not in sessions[mouse]: raise ValueError('Invalide session/mouse combo')
 
     # Get individual recording's within the session, and the calcium data for each
@@ -11,9 +41,7 @@ def get_mouse_session_data(mouse, session, sessions):
     roi_ids, roi_sigs, nrois = Roi().get_sessions_rois(mouse, session)
     roi_ids = list(roi_ids.values())[0]
 
-    # print(f'\nNumber of rois per recording: | should be the same for each recording\n  {nrois}')
-
-    # Concatenate calcium signals
+    # Concatenate calcium signals from each recording within the experiment
     _signals = [[] for i in np.arange(nrois[recs[0]])]
     is_rec = []
 
@@ -28,7 +56,7 @@ def get_mouse_session_data(mouse, session, sessions):
     signals = [np.hstack(s).T for s in _signals]
     _nrois = len(signals)
 
-    # Get tracking data 
+    # Get tracking data from all recordings and concatenate
     body_tracking, ang_vel, speed, shelter_distance = [], [], [], []
     for rec in recs:
         bt, av, s, sd = Trackings().get_recording_tracking_clean(mouse_name=mouse, sess_name=session, rec_name=rec)
@@ -37,7 +65,7 @@ def get_mouse_session_data(mouse, session, sessions):
         speed.append(s)
         shelter_distance.append(sd)
 
-    body_tracking = np.hstack(body_tracking)
+    body_tracking = np.hstack(body_tracking) # ! concatenating
     ang_vel = np.hstack(ang_vel).T
     speed = np.hstack(speed).T
     shelter_distance = np.hstack(shelter_distance).T
@@ -62,3 +90,72 @@ def get_mouse_session_data(mouse, session, sessions):
         is_rec = a
 
     return tracking, ang_vel, speed, shelter_distance, clean_signal, _nrois, is_rec
+
+
+def get_shelter_threat_trips(data, shelter_x=400, threat_x=800, only_recording_on=True, stimuli=None, min_frames_after_stim=10*30):
+    """
+        Returns the timepoints when the mouse moves between the shelter and the threat
+
+        :param data, pandas.DataFrane with ['x'] location as one of the columns
+        :param shelter_x: int, when x < this mouse is considered in the shelter
+        :param threat_x: int, when x > this mouse is considered in the threat area
+        :param only_recording_on: bool. If true only trips when the recording was ON
+                throughout are considered. If using this the data DF needs to have a 
+                ['isrec'] column
+        :param stimuli: optional, a list with the frame numner of each stim in the session
+        :min_frames_after_stim int: if stimuli are passed, when getting threat->shelter
+                trips, onlyt those trips where at least min_frames_after_stim frames
+                have passed between the last stimulus and the threat exit . 
+
+    """
+    # Get times when mouse enters/exits shelter and threat
+    in_shelter = np.zeros_like(data.x)
+    in_shelter[data.x < shelter_x] = 1
+
+
+    in_threat = np.zeros_like(data.x)
+    in_threat[data.x > threat_x] = 1
+
+
+    shelter_enter, shelter_exit = get_times_signal_high_and_low(in_shelter, th=.5)
+    threat_enter, threat_exit = get_times_signal_high_and_low(in_threat, th=.5)
+
+    # Get s -> t events
+    outtrips = []
+    all_events = sorted(list(shelter_exit) + list(threat_enter))
+    for ext in shelter_exit:
+            nxt = [ev for ev in all_events if ev > ext]
+            if nxt:
+                    if nxt[0] in threat_enter:
+                        if only_recording_on:
+                            not_recording = [0 for i in data.isrec[ext:nxt[0]].values if not i]
+                            if not_recording:
+                                continue
+                        outtrips.append((ext, nxt[0]))
+
+    intrips = []
+    all_events = sorted(list(threat_exit) + list(shelter_enter))
+    for ext in threat_exit:
+            nxt = [ev for ev in all_events if ev > ext]
+            if nxt:
+                    if nxt[0] in shelter_enter:
+                        # Make sure that recirding was on
+                        if only_recording_on:
+                            not_recording = [0 for i in data.isrec[ext:nxt[0]].values if not i]
+                            if not_recording:
+                                continue
+                        
+                        # Exclude trips that happened right after a stimulus
+                        if stimuli is not None:
+                            last_stim = [s for s in stimuli if s < ext]
+                            if last_stim:
+                                if ext - last_stim[-1] < min_frames_after_stim:
+                                    continue
+                                else:
+                                    print(min_frames_after_stim, ext - last_stim[-1])
+
+                        intrips.append((ext, nxt[0]))
+
+
+    return outtrips, intrips
+
