@@ -136,28 +136,29 @@ class Recording(dj.Imported): #  In each session there might be multiple recordi
     def get_recording_fps(self, **kwargs):
         return (self & kwargs).fetch1("fps_behav")
 
-    def get_recording_stimuli_clean(self, **kwargs):
+    def get_recording_stimuli(self, clean=True, **kwargs):
         # kwargs should have info about: sess_name, mouse, rec_name
         if not 'sess_name' in kwargs.keys() or\
                 not 'mouse' in kwargs.keys() or\
                     not 'rec_name' in kwargs.keys():
                     raise ValueError('Not enough inputs')
 
-        # Get recording's fps
-        fps = self.get_recording_fps(**kwargs)
-        min_frames_betweeen_stimuli = self.min_time_between_stims * fps
-
         # Fetch recording's stimuli and tracking data
         # Get stimuli
-        vstims = (VisualStimuli & kwargs).fetch("frame")
-        astims = (AudioStimuli & kwargs).fetch("frame")
+        vstims = list((VisualStimuli & kwargs).fetch("frame"))
+        astims = list((AudioStimuli & kwargs).fetch("frame"))
 
         # Keep only stimuli that didn't happen immediately one after the other
-        if np.any(vstims):
-            vstims = [vstims[0]] + [s for n,s in enumerate(vstims[1:]) if s-vstims[n] > min_frames_betweeen_stimuli+1]
-        if np.any(astims):
-            astims = [astims[0]] + [s for n,s in enumerate(astims[1:]) if s-astims[n] > min_frames_betweeen_stimuli+1]
-        astims = [s for s in astims if s not in vstims] # for some reason some are repeated
+        if clean:
+            # Get recording's fps
+            fps = self.get_recording_fps(**kwargs)
+            min_frames_betweeen_stimuli = self.min_time_between_stims * fps
+            
+            if np.any(vstims):
+                vstims = [vstims[0]] + [s for n,s in enumerate(vstims[1:]) if s-vstims[n] > min_frames_betweeen_stimuli+1]
+            if np.any(astims):
+                astims = [astims[0]] + [s for n,s in enumerate(astims[1:]) if s-astims[n] > min_frames_betweeen_stimuli+1]
+            astims = [s for s in astims if s not in vstims] # for some reason some are repeated
 
         return vstims, astims
 
@@ -348,13 +349,24 @@ class Trackings(dj.Imported):
     def get_recording_tracking_clean(self, **kwargs):
         # kwargs should have info about: sess_name, mouse, rec_name
         body_tracking = np.vstack((self * self.BodyPartTracking & kwargs & "bp='body'").fetch1("x", "y", "speed"))
+        neck_tracking = np.vstack((self * self.BodyPartTracking & kwargs & "bp='neck'").fetch1("x", "y", "speed"))
+        tail_tracking = np.vstack((self * self.BodyPartTracking & kwargs & "bp='tail_base'").fetch1("x", "y", "speed"))
 
-        # Get an average angular velocity  o minimise artifacts
-        ang_vel1 = median_filter((self * self.BodySegmentTracking & kwargs & "bp1='neck'" & "bp2='body'").fetch1("angular_velocity"), kernel_size=11)
-        ang_vel2 = median_filter((self * self.BodySegmentTracking & kwargs & "bp1='body'" & "bp2='tail_base'").fetch1("angular_velocity"), kernel_size=11)
+        # Get an average of speed traces to minimise artifacs
+        speed = np.nanmedian(np.vstack([body_tracking[2, :], neck_tracking[2, :], tail_tracking[2, :]]), axis=0)
+        speed = median_filter(speed, kernel_size=5)
 
-        ang_vel = np.median(np.vstack([ang_vel1, ang_vel2]), axis=0)
-        speed = median_filter(body_tracking[2, :], kernel_size=11)
+        # Get an average angular velocity to minimise artifacts
+        ang_vel1 = (self * self.BodySegmentTracking & kwargs & "bp1='neck'" & "bp2='body'").fetch1("angular_velocity")
+        ang_vel2 = (self * self.BodySegmentTracking & kwargs & "bp1='body'" & "bp2='tail_base'").fetch1("angular_velocity")
+
+        ang_vel = np.nanmedian(np.vstack([ang_vel1, ang_vel2]), axis=0)
+        ang_vel = median_filter(ang_vel, kernel_size=5)
+
+        # Remove outliers
+        ang_vel[ang_vel > np.percentile(ang_vel, 99)] = np.nan
+        ang_vel[ang_vel < np.percentile(ang_vel, 1)] = np.nan
+
         shelter_distance = body_tracking[0, :]-shelter_width_px-200
 
         return body_tracking, ang_vel, speed, shelter_distance

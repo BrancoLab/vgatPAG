@@ -4,7 +4,7 @@ from vgatPAG.database.db_tables import *
 
 
 
-def get_session_stimuli_frames(mouse, sess):
+def get_session_stimuli_frames(mouse, sess, clean=True):
     """
         Returns the frame number of each stimulus within one experiment
         When >1 recordings where done within the same experiment
@@ -16,17 +16,19 @@ def get_session_stimuli_frames(mouse, sess):
     recs = Recording().get_sessions_recordings(mouse, sess)
 
     cum_nframes = 0
-    stims = []
+    astims, vstims = [], []
     for rec in recs:
         kwargs = dict(sess_name=sess, mouse=mouse, rec_name = rec)
         
-        stimuli = Recording().get_recording_stimuli_clean(**kwargs)
-        stims.extend([s+cum_nframes for s in stimuli[0]+stimuli[1]])
+        vis, aud = Recording().get_recording_stimuli(clean=clean, **kwargs)
+
+        astims.extend([s+cum_nframes for s in aud])
+        vstims.extend([s+cum_nframes for s in vis])
 
         nframes = (Recording & kwargs).fetch1('n_frames')
         cum_nframes += nframes
 
-    return stims
+    return vstims, astims
 
 
 def get_mouse_session_data(mouse, session, sessions):
