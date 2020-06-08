@@ -38,11 +38,10 @@ recordings = {m:{s:(Recording & f"sess_name='{s}'" & f"mouse='{m}'").fetch(as_di
 for mouse in mice:
     for sess in sessions[mouse]:
         # Fetch some data
-        recs = Recording().get_sessions_recordings(sess)
-        roi_ids, roi_sigs, nrois = Roi().get_sessions_rois(sess)
+        recs = Recording().get_sessions_recordings(mouse, sess)
+        roi_ids, roi_sigs, nrois = Roi().get_sessions_rois(mouse, sess)
         roi_ids = list(roi_ids.values())[0]
 
-        raise NotImplementedError('Cehck roi_inspectr.ipynb for improved data fetching')
 
         # Loop over each ROI
         print(f"Mouse {mouse} - session: {sess} - [{len(roi_ids)} rois]")
@@ -96,9 +95,9 @@ for mouse in mice:
             # exog = exog.drop(columns=['speed'])
 
             # add interaction terms
-            exog['shelt_speed'] = - derivative(exog['shelter_distance'].values)
-            exog['shelt_accel'] = derivative(exog['shelt_speed'].values)
-            exog['speedxsdist'] = (exog['shelt_speed'] * exog['shelter_distance'])
+            # exog['shelt_speed'] = - derivative(exog['shelter_distance'].values)
+            # exog['shelt_accel'] = derivative(exog['shelt_speed'].values)
+            # exog['speedxsdist'] = (exog['shelt_speed'] * exog['shelter_distance'])
 
             # NOrmalize and prepare endog
             exog = pd.DataFrame(preprocessing.scale(exog.values, axis=0), columns=exog.columns, index=exog.index)

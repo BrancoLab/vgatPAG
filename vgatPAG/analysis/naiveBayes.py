@@ -41,43 +41,62 @@ from math import exp, sqrt, pi
 """
 
 class NaiveBayes:
-    def __init__(self, predictor, predicted, equalize_classes = True):
+    def __init__(self, predictor, predicted, equalize_classes = True, min_samples_per_class=1000, nsamples=10000):
+        """
+            This class impleements a naive bayes classifier. 
+
+            :param equalize_classes: bool. if True data are drop to make sure that all classes being predicted
+                    appear with the same frequency in the dataset
+            :param min_samples_per_class: int, if equalizing class frequency, the minimum number of samples
+                    for the rarest class
+            :param nsamples: if equalizing class frequency, take this number of samples (with replacement)
+                    from each class
+
+        """
+
         if not isinstance(predictor, pd.DataFrame):
             raise ValueError('Predictor should be dataframes')
         if not isinstance(predicted, dict):
             raise ValueError('Predicted should be a dictionary of one key')
         
+        self.nsamples = nsamples
+
         # Split the data in training and test sets
         data = predictor.copy()
+        self.first_col = data.columns[0]
 
         pred = list(predicted.keys())[0]
         data[pred] = predicted[pred]
 
         if equalize_classes:
-            data = self.equalize_classes(data)
+            data = self.equalize_classes(data, min_samples_per_class)
 
-        train, test = train_test_split(data, test_size=0.2)
+        train, test = train_test_split(data, test_size=0.5)
         self.train = train.reset_index(drop=True)
         self.test = test.reset_index(drop=True)
 
-    def equalize_classes(self, data):
+    def equalize_classes(self, data, min_samples_per_class):
         # Find which class has the lowest probability
         initial_len = len(data)
         model = self.summarize_data_by_class(data)
-        class_probas = {k: model[k][0].class_probability for k in model.keys()}
-        rarest = min(class_probas.items(), key=operator.itemgetter(1))[0]
 
         # Make sure that every class has as many row as the rarest
-        nsamples = len(data.loc[data.category == rarest])
+        # ? By keeping the minimal number of samples:
+        # nsamples = int(min([model[k][self.first_col].nrows for k in model.keys()]))
+        # if nsamples < min_samples_per_class:
+        #     raise ValueError('Not enough data left sorry, try reducing the number of bins')
+        # with_replacement = False
+        # ? By keeping the maximal number of samples
+        
+        # nsamples = int(max([model[k][self.first_col].nrows for k in model.keys()]))
 
-        if nsamples < 10000:
-            raise ValueError('Not enough data left sorry')
+        with_replacement = True
 
         dfs = []
         for label in model.keys():
             subdata = data.loc[data.category == label].reset_index(drop=True)
             # select N random rows
-            dfs.append(subdata.sample(nsamples))
+            dfs.append(subdata.sample(self.nsamples, replace=with_replacement))
 
 
         clean = pd.concat(dfs, ignore_index=True)
@@ -91,7 +110,7 @@ class NaiveBayes:
         model = self.summarize_data_by_class(self.train)
 
         if plot_class_probas:
-            class_probas = {k: model[k][0].class_probability for k in model.keys()}
+            class_probas = {k: model[k][self.first_col].class_probability for k in model.keys()}
 
             if np.abs(sum(class_probas.values()) - 1.0)>.05: # some leeway beacuse of rounding errors
                 raise ValueError("Something's fishy")
@@ -111,14 +130,18 @@ class NaiveBayes:
         predictions, labels = [], []
 
         if maxrows is not None:
-            idxs = choices(np.arange(len(self.test)), k=maxrows)
+            if maxrows < len(self.test):
+                idxs = choices(np.arange(len(self.test)), k=maxrows)
+            else:
+                idxs = np.arange(len(self.test))
         else:
             idxs = np.arange(len(self.test))
 
         for i in idxs:
             row = self.test.iloc[i]
-            predictions.append(self.predict_row(row))
             labels.append(row.category)
+            row = row.drop('category')
+            predictions.append(self.predict_row(row))
 
         self.labels, self.predicted =  labels, predictions
 
@@ -135,7 +158,7 @@ class NaiveBayes:
                                 if actual == predicted])
         perform =  correct / float(len(self.labels)) * 100
 
-        class_probas = {k: round(self.model[k][0].class_probability, 2) for k in self.model.keys()}
+        class_probas = {k: round(self.model[k][self.first_col].class_probability, 2) for k in self.model.keys()}
 
         if verbose:
             print(f'Model predicted on test set with {round(perform, 3)}% accuracy')
@@ -159,7 +182,7 @@ class NaiveBayes:
             summary = pd.DataFrame(dict(
                     mean = subdata.mean().values,
                     std = subdata.std().values, 
-                    nrows = [len(subdata) for i in np.arange(len(subdata.columns))],
+                    nrows = [int(len(subdata)) for i in np.arange(len(subdata.columns))],
                     class_probability = [len(subdata)/len(data) for i in np.arange(len(subdata.columns))]
             )).T
             summary.columns = subdata.columns
@@ -186,7 +209,8 @@ class NaiveBayes:
         for class_val, summary in self.model.items():
             # For each class compute p(c=ci)
             # This is given by the number of rows with that class divided by the total number of rows
-            probabilities[class_val] = self.model[class_val][0].class_probability
+            
+            probabilities[class_val] = self.model[class_val][self.first_col].class_probability
             
             # For each data variable, compute p(Xi|c=ci) and multiply that by the class probability
             for col in summary.columns:
@@ -206,51 +230,5 @@ class NaiveBayes:
                     f'predicted: {predicted_class} - maxproba {maxproba} - probabilities {probabilities[predicted_class]}')
 
         return predicted_class
-
-
-
-if __name__ == '__main__':
-    # ------------------------------- Get metadata ------------------------------- #
-    # Get all mice
-    mice = Mouse.fetch("mouse")
-
-    # Get all sessions
-    sessions = {m:(Session & f"mouse='{m}'").fetch("sess_name") for m in mice}
-
-    # Get the recordings for each session
-    recordings = {m:{s:(Recording & f"sess_name='{s}'" & f"mouse='{m}'").fetch(as_dict=True) for s in sessions[m]} for m in mice}
-    
-    
-    # --------------------------------- Get data --------------------------------- #
-    mouse = mice[0]
-    sess = sessions[mouse][0]
-
-    tracking, ang_vel, speed, shelter_distance, signals, _nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
-
-    # Prep data
-    data = pd.DataFrame({r:sig for r,sig in enumerate(signals)})
-    data['xpos'] = tracking.x
-
-    # Keep only timepoint during recording
-    data = data[is_rec > 0].reset_index(drop=True)
-    data = data[:-60] # drop the last few rows because sometimes there's some null values
-
-    # ! testing stuff
-    # data = data[data.xpos> 300]
-
-    # Create categories based on the X position
-    N_bins = 5
-    categories = pd.cut(data['xpos'], bins= np.linspace(data.xpos.min()-1, data.xpos.max()+1, N_bins+1))
-    int_values =  np.array([(i.left + i.right)/2 for i in categories.values])
-    data = data.drop('xpos', axis=1)
-
-    nb = NaiveBayes(data, dict(category=int_values))
-    labels, predictions = nb.fit_predict(maxrows=None)
-    nb.evaluate()
-
-
-
-    # TODO think about unbiasing input dataset to make things easier to interpret
-    # TODO or just use sklearn
 
 

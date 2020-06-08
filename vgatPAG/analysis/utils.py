@@ -92,7 +92,9 @@ def get_mouse_session_data(mouse, session, sessions):
     return tracking, ang_vel, speed, shelter_distance, clean_signal, _nrois, is_rec
 
 
-def get_shelter_threat_trips(data, shelter_x=400, threat_x=800, only_recording_on=True, stimuli=None, min_frames_after_stim=10*30):
+def get_shelter_threat_trips(data, shelter_x=400, threat_x=800, only_recording_on=True, 
+                stimuli=None, min_frames_after_stim=10*30, 
+                mean_speed_th = 2):
     """
         Returns the timepoints when the mouse moves between the shelter and the threat
 
@@ -103,9 +105,11 @@ def get_shelter_threat_trips(data, shelter_x=400, threat_x=800, only_recording_o
                 throughout are considered. If using this the data DF needs to have a 
                 ['isrec'] column
         :param stimuli: optional, a list with the frame numner of each stim in the session
-        :min_frames_after_stim int: if stimuli are passed, when getting threat->shelter
+        :param min_frames_after_stim: int if stimuli are passed, when getting threat->shelter
                 trips, onlyt those trips where at least min_frames_after_stim frames
                 have passed between the last stimulus and the threat exit . 
+        :param mean_speed_th: float. if not None, only trips with average speed > mean_speed_th 
+                are kept
 
     """
     # Get times when mouse enters/exits shelter and threat
@@ -123,38 +127,59 @@ def get_shelter_threat_trips(data, shelter_x=400, threat_x=800, only_recording_o
     # Get s -> t events
     outtrips = []
     all_events = sorted(list(shelter_exit) + list(threat_enter))
+    
+    # ------------------------ Get shelter to threat trips ----------------------- #    
+    # For everytime the mouse leaves the shelter
     for ext in shelter_exit:
-            nxt = [ev for ev in all_events if ev > ext]
-            if nxt:
-                    if nxt[0] in threat_enter:
-                        if only_recording_on:
-                            not_recording = [0 for i in data.isrec[ext:nxt[0]].values if not i]
-                            if not_recording:
-                                continue
-                        outtrips.append((ext, nxt[0]))
+        # Check if the next event is the mouse entering the threa area
+        nxt = [ev for ev in all_events if ev > ext]
+        if nxt:
+                if nxt[0] in threat_enter:
+                    # Make sure that recording was on throughout the trip
+                    if only_recording_on:
+                        not_recording = [0 for i in data.isrec[ext:nxt[0]].values if not i]
+                        if not_recording:
+                            continue
+
+                    # Check if mean speed > threshold
+                    if mean_speed_th is not None:
+                        if data[ext:nxt[0]].s.mean() < mean_speed_th:
+                            continue
+
+                    # Add to records
+                    outtrips.append((ext, nxt[0]))
+
+    # ------------------------ Get threat to shelter trips ----------------------- #
 
     intrips = []
     all_events = sorted(list(threat_exit) + list(shelter_enter))
+    
+    # For everytime the mouse leaves the threat area
     for ext in threat_exit:
-            nxt = [ev for ev in all_events if ev > ext]
-            if nxt:
-                    if nxt[0] in shelter_enter:
-                        # Make sure that recirding was on
-                        if only_recording_on:
-                            not_recording = [0 for i in data.isrec[ext:nxt[0]].values if not i]
-                            if not_recording:
-                                continue
-                        
-                        # Exclude trips that happened right after a stimulus
-                        if stimuli is not None:
-                            last_stim = [s for s in stimuli if s < ext]
-                            if last_stim:
-                                if ext - last_stim[-1] < min_frames_after_stim:
-                                    continue
-                                else:
-                                    print(min_frames_after_stim, ext - last_stim[-1])
+        # If the next event is the moues entering the shelter area
+        nxt = [ev for ev in all_events if ev > ext]
+        if nxt:
+                if nxt[0] in shelter_enter:
 
-                        intrips.append((ext, nxt[0]))
+                    # Make sure that recirding was on throughout the trip
+                    if only_recording_on:
+                        not_recording = [0 for i in data.isrec[ext:nxt[0]].values if not i]
+                        if not_recording:
+                            continue
+                    
+                    # Exclude trips that happened right after a stimulus
+                    if stimuli is not None:
+                        last_stim = [s for s in stimuli if s < ext]
+                        if last_stim:
+                            if ext - last_stim[-1] < min_frames_after_stim:
+                                continue
+
+                    # Check if mean speed > threshold
+                    if mean_speed_th is not None:
+                        if data[ext:nxt[0]].s.mean() < mean_speed_th:
+                            continue
+
+                    intrips.append((ext, nxt[0]))
 
 
     return outtrips, intrips

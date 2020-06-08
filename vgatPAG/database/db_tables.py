@@ -612,10 +612,10 @@ class Event(dj.Imported):
         spont = pd.DataFrame((self * self.Spontaneous & kwargs).fetch())
         return evoked, spont
 
-    def get_sessions_events(self, sess_name):
-        recs = Recording().get_sessions_recordings(sess_name)
-        evoked = {r:self.get_recordings_events(sess_name=sess_name, rec_name=r)[0] for r in recs}
-        spont = {r:self.get_recordings_events(sess_name=sess_name, rec_name=r)[1] for r in recs}
+    def get_sessions_events(self, mouse, sess_name):
+        recs = Recording().get_sessions_recordings(mouse, sess_name)
+        evoked = {r:self.get_recordings_events(mouse=mouse, sess_name=sess_name, rec_name=r)[0] for r in recs}
+        spont = {r:self.get_recordings_events(mouse=mouse, sess_name=sess_name, rec_name=r)[1] for r in recs}
         return evoked, spont
 
 

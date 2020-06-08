@@ -213,10 +213,10 @@ def plot_model(ax, behav_traces, model, label, color):
 for mouse in mice:
     for sess in sessions[mouse]:
         # Fetch some data
-        recs = Recording().get_sessions_recordings(sess)
-        roi_ids, roi_sigs, nrois = Roi().get_sessions_rois(sess)
+        recs = Recording().get_sessions_recordings(mouse, sess)
+        roi_ids, roi_sigs, nrois = Roi().get_sessions_rois(mouse, sess)
         roi_ids = list(roi_ids.values())[0]
-        evoked, spont = Event().get_sessions_events(sess)
+        evoked, spont = Event().get_sessions_events(mouse, sess)
 
         # prep some variables
         fps = Recording().get_recording_fps(rec_name=recs[0])
@@ -357,12 +357,12 @@ for mouse in mice:
                     traces['random'].append(list(Roi().get_roi_signal_at_random_time(rec, roi_ids[n], frames_pre, frames_post)))
 
             # Plot mean roi signal traces
-            means = {}
+            # means = {}
             for key, trace in traces.items():
                 if key == 'random' or 'ols' in key: continue
                 if np.any(trace):
                     sig = plot_roi_mean_sig(axes[key][4], trace, traces['random'])
-                    means.append(sig)
+                    # means.append(sig)
 
             # Fetch and plot OLS fits
             thresholds = [2]
@@ -397,7 +397,4 @@ for mouse in mice:
         if DEBUG: break
     if DEBUG: break
 plt.show()
-
-# TODO exclude spont events that include no roi signal
-
 
