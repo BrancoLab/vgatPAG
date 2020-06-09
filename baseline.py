@@ -8,14 +8,16 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import seaborn as sns
+from pathlib import Path
+from random import choices
 
 from Analysis  import (
         mice,
         sessions,
         recordings,
-        print_recordings_tree,
         recording_names,
         stimuli,
+        clean_stimuli,
         get_mouse_session_data,
         sessions_fps,
 )
@@ -27,10 +29,93 @@ from Analysis import (
     signal_color,
 )
 
-print_recordings_tree()
-
-from fcutils.plotting.utils import save_figure, clean_axes
+from fcutils.plotting.utils import save_figure, clean_axes, set_figure_subplots_aspect
 from fcutils.plotting.plot_elements import plot_mean_and_error
+from fcutils.plotting.plot_distributions import plot_kde
+
+from brainrender.colors import makePalette, colorMap
+
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import minmax_scale
+import statsmodels.api as sm
+from sklearn import preprocessing
+
+
+from vgatPAG.paths import output_fld
+output_fld = Path(output_fld)
+
+
+
+# %%
+'''
+    Get baselines
+'''
+# Variables
+N_sec_pre = 2
+N_sec_post = 8
+SHOW_MEAN = False
+
+STIMS = clean_stimuli
+
+exploration_baselines = {} #  each ROIs baseline before the first stimulus
+exploration_baselines_behaviour = {}
+baselines = {}
+behaviour_baselines = {}
+for mouse in mice:
+    for sess in tqdm(sessions[mouse]):
+        frames_pre = N_sec_pre * sessions_fps[mouse][sess]
+
+        # Prep data
+        stims = STIMS[f'{mouse}-{sess}']
+        if not len(stims.all): 
+            baselines[f'{mouse}-{sess}'] = None
+            continue
+        tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
+        
+        bss = [[] for i in np.arange(nrois)] # signal baselines
+        xss = [] # x position
+        sss = [] # speed
+        ess = [] # exploration baselines
+
+        for stim in stims.all:
+            if is_rec[stim] == 0: continue # keep only stims that happened during recordings 
+            for n, signal in enumerate(signals):
+                bss[n].append(signal[stim-frames_pre:stim])
+
+            xss.append(tracking.x[stim-frames_pre:stim])
+            sss.append(speed[stim-frames_pre:stim])
+
+        # Get exploration baseline
+        for n, signal in enumerate(signals):
+            sig = signal[:stims.all[0]]
+            ess.append(sig[is_rec[:stims.all[0]]==1])
+
+        exploration_baselines_behaviour[f'{mouse}-{sess}'] = (tracking.x[:stims.all[0]], speed[:stims.all[0]])
+
+
+        exploration_baselines[f'{mouse}-{sess}'] = np.vstack(ess) # N rois by N frames exploration
+        baselines[f'{mouse}-{sess}'] = [np.vstack(bs) for bs in bss] # each rois bs array is N stim by N frames pre
+        behaviour_baselines[f'{mouse}-{sess}'] = (np.vstack(xss), np.vstack(sss)) # N stims by N frames
+
+
+# %%
+"""
+    Fit PCA to the whole sessions recording
+"""
+whole_sess_pca = {}
+for mouse in mice:
+    for sess in sessions[mouse]:
+        # Prep data
+        tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
+
+        signal = np.vstack([s[is_rec == 1] for s in signals]) # n rois by n frames
+        whole_sess_pca[f'{mouse}-{sess}'] = PCA(n_components=2).fit(signal.T)
+
+        # plt.figure()
+        # plt.plot(whole_sess_pca[f'{mouse}-{sess}'].explained_variance_ratio_)
+
+
+
 
 # %%
 
@@ -56,6 +141,7 @@ for mouse in mice:
         frames_post = N_sec_post * sessions_fps[mouse][sess]
         time = np.arange(-frames_pre, frames_post)
 
+        raise NotImplementedError('fix baselines usage')
         baselines = [[] for i in np.arange(nrois)]
 
         # Plot traces
@@ -104,5 +190,199 @@ for mouse in mice:
         clean_axes(f)
         break
     break
-# %%
 
+# %%
+"""
+        Plot each trials baseline as a scatter plot + scatter of PCA
+"""
+
+
+def fit_lin_regrs(R, X, S):
+    """
+        predicts a ROI's mean baseline activity at each trial (R)
+        with the mean X position (X) and mean speed (S) at each trial
+        with a linear regression + OLS
+    """
+    # prep data
+    exog = pd.DataFrame(dict(S=S)).interpolate()
+    endog = pd.DataFrame(dict(R=R))
+
+    # NOrmalize and prepare endog
+    # exog = pd.DataFrame(preprocessing.scale(exog.values, axis=0), columns=exog.columns, index=exog.index)
+    exog = sm.add_constant(exog, prepend=False)
+
+    # Fit and save
+    model = sm.OLS(endog, exog).fit()
+    return exog, endog, model
+    
+
+def get_exploration_mean_and_variance(expl, N, M=1):
+    """
+        Given a 1d array with a ROIs exploration trace (expl) it takes
+        the mean and starndard deviation of N intervals
+    """
+
+    idxs = np.arange(frames_pre+1, len(expl)-frames_pre-1)
+    starts = choices(idxs, k=N)
+
+    intervals = [expl[i-frames_pre:i] for i in starts]
+    data = np.vstack(intervals)
+
+    mean, std = np.mean(data), np.std(data)
+
+    return np.array([mean for i in np.arange(M)]), np.array([std for i in np.arange(M)])
+
+
+
+
+save_fld = output_fld / 'baseline'
+save_fld.mkdir(exist_ok=True)
+
+baseline_averages = {}
+
+for mouse in mice:
+    for sess in sessions[mouse]:
+        frames_pre = N_sec_pre * sessions_fps[mouse][sess]
+
+        # Prep data, make figure
+        bss = baselines[f'{mouse}-{sess}']
+        if bss is None: continue
+
+        n_trials = bss[0].shape[0]
+        n_rois = len(bss)
+
+        f, axarr = plt.subplots(nrows=6, ncols=4, sharex=True, sharey=False, figsize=(24, 10), num=f'{mouse}-{sess}')
+        f.suptitle(f'Baseline variability - {mouse} {sess}')
+        axarr = axarr.flatten()
+        
+        # Plot each trial for each ROI
+        colors = np.array([colorMap(i, 'Reds', vmin=-4, vmax=n_trials+4) for i in np.arange(n_trials)])
+
+        # Get means for speed and X baselines
+        x, spd = behaviour_baselines[f'{mouse}-{sess}']
+        x, spd = np.nanmean(x, 1), np.nanmean(spd, 1)
+
+
+        rois_means = [] #  used for PCA
+        for n, (ax, bs) in enumerate(zip(axarr, bss)):
+            # get rois data
+            means = np.array([np.mean(b) for b in bs])
+            rois_means.append(means)
+            
+            stds = np.array([np.std(b)*2 for b in bs])
+            sortidx = np.argsort(means)[::-1]
+
+            # Fit linear regression model
+            exog, endog, model = fit_lin_regrs(means, x, spd)
+
+            # Plot not sorted
+            time = np.arange(len(means))
+            ax.errorbar(time, means, fmt='o', yerr=stds, capthick=2, ecolor='k', zorder=30)
+            ax.scatter(time, means, c=colors, s=50, zorder=99, lw=1, edgecolors ='k')
+
+            # Plot speed and X baselines scaled
+            _x, _s = minmax_scale(x, feature_range=(np.min(means), np.max(means))), minmax_scale(spd, feature_range=(np.min(means), np.max(means)))
+            # ax.plot(time, _x, color=shelt_dist_color, lw=4, alpha=.2, zorder=20, label='X pos')
+            ax.plot(time, _s, color=speed_color, lw=4, alpha=.6, zorder=20, label='Speed')
+
+            # Plot linear regression's prediction
+            # ax.scatter(time, model.fittedvalues, color=[.5, .5, .5], s=45, zorder=90, alpha=.5)
+
+            # Plot exploration ROI mean activity
+            expl_mean, expl_sdt = get_exploration_mean_and_variance(exploration_baselines[f'{mouse}-{sess}'][n, :], n_trials*5, n_trials)
+            plot_mean_and_error(expl_mean, expl_sdt, ax, x=time, color=[.2, .2, .2], err_color=[.4, .4, .4], label='expl mean')
+
+            # Clean up axis
+            if n == 0:
+                ax.legend()
+            ax.set(ylabel=f'ROI - {n}', xlabel='stimuli') # , ylim=[np.min(means)-50, np.max(means)+50])
+
+        baseline_averages[f'{mouse}-{sess}'] = pd.DataFrame(rois_means) # used for PCA
+
+
+        clean_axes(f)
+
+        plt.figure(f'{mouse}-{sess}')
+        set_figure_subplots_aspect(hspace=.6, top=.95, wspace=.25)
+        save_figure(f, str(save_fld/f'{mouse} {sess} ROIs'))
+
+    #     break
+    # break
+
+
+
+
+
+
+# %%
+"""
+    Similar to above but in PCA space
+"""
+WHOLE_SESS_PCA = 'expl'
+
+
+for mouse in mice:
+    for sess in sessions[mouse]:
+        # Prep data, make figure
+        bss = baselines[f'{mouse}-{sess}']
+        if bss is None: continue
+
+        n_trials = bss[0].shape[0]
+        n_rois = len(bss)
+        colors = np.array([colorMap(i, 'Reds', vmin=-4, vmax=n_trials+4) for i in np.arange(n_trials)])
+
+
+        # f2, ax2= plt.subplots(num=f'{mouse}-{sess}2')
+        f2 = plt.figure(figsize=(16, 8))
+        ax = f2.add_subplot(1, 2, 1)
+        ax2 = f2.add_subplot(1, 2, 2)
+        f2.suptitle(f'Baseline variability PCA - {mouse} {sess} \n      red = late in session')
+
+        # plot activity in PC space for each trial
+        trials = [np.vstack([bss[n][t] for n in np.arange(n_rois)]) for t in np.arange(n_trials)]
+        all_trials = np.hstack(trials) # N rois by (N frames * N stimuli)
+
+        # fit PCA on the whole dataset
+        if not WHOLE_SESS_PCA:
+            pca = PCA(n_components=2).fit(all_trials.T) # Ntrials x (NROIS by nframes)
+        elif WHOLE_SESS_PCA == 'expl': # fit PLCA to exploration data
+            pca = PCA(n_components=2).fit(np.vstack(exploration_baselines[f'{mouse}-{sess}']).T) 
+        else:
+            pca = whole_sess_pca[f'{mouse}-{sess}']
+
+        # Plot population activity as PCA
+        for t, trial in enumerate(trials):
+            PC = pca.transform(np.vstack(trial).T)
+ 
+            ax.errorbar(np.mean(PC[:, 0]), np.mean(PC[:, 1]), xerr=np.std(PC[:, 0]), yerr=np.std(PC[:, 1]), ecolor='k')
+            ax.scatter(np.mean(PC[:, 0]), np.mean(PC[:, 1]), color=colors[t], zorder=99, s=60, lw=1, edgecolors ='k')
+
+        # Plot contour of PCA of exploration
+        PC = pca.transform(np.vstack(exploration_baselines[f'{mouse}-{sess}']).T)        
+        sns.kdeplot(PC[:, 0], PC[:, 1], shade=True, ax=ax, shade_lowest=False, n_levels=10, label='exploration')
+        ax.legend()
+
+        # Plot stuff for speed
+        expl_speed = exploration_baselines_behaviour[f'{mouse}-{sess}'][1]
+        plot_kde(data=expl_speed, ax=ax2, color=speed_color, label='exploration')
+        x, spd = behaviour_baselines[f'{mouse}-{sess}']
+        for s in spd:
+            ax2.hist([np.mean(s) for s in spd], bins=10, density=True)
+        ax2.legend()
+        
+
+        # Clean up
+        ax.set(title='activity PCA', xlabel='PC1', ylabel='PC2')
+        ax2.set(title ='SPEED distribution', xlabel='speed', ylabel='density')
+        clean_axes(f2)
+        # set_figure_subplots_aspect(hspace=.6, top=.95, wspace=.25)
+        save_figure(f2, str(save_fld/f'{mouse} {sess} PCA'))
+
+
+    #     break
+    # break
+
+
+
+# %%
+plt.hist([np.mean(s) for s in spd])

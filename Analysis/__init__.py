@@ -37,7 +37,11 @@ def print_recordings_tree():
 # Get stimuli
 stimstuple = namedtuple('stimuli', 'vis aud all')
 stimuli = {}
+clean_stimuli = {}
 for mouse in mice:
     for sess in sessions[mouse]:
-        vis, aud = get_session_stimuli_frames(mouse, sess, clean=True)
+        vis, aud = get_session_stimuli_frames(mouse, sess, clean=False)
         stimuli[f'{mouse}-{sess}'] = stimstuple(vis, aud, vis+aud)
+
+        vis, aud = get_session_stimuli_frames(mouse, sess, clean=True)
+        clean_stimuli[f'{mouse}-{sess}'] = stimstuple(vis, aud, vis+aud)
