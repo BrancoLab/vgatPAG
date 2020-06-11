@@ -30,8 +30,9 @@ from Analysis import (
 )
 
 from fcutils.plotting.utils import save_figure, clean_axes, set_figure_subplots_aspect
-from fcutils.plotting.plot_elements import plot_mean_and_error
+from fcutils.plotting.plot_elements import plot_mean_and_error, plot_shaded_withline
 from fcutils.plotting.plot_distributions import plot_kde
+from fcutils.maths.filtering import line_smoother
 
 from brainrender.colors import makePalette, colorMap
 
@@ -90,7 +91,8 @@ for mouse in mice:
             sig = signal[:stims.all[0]]
             ess.append(sig[is_rec[:stims.all[0]]==1])
 
-        exploration_baselines_behaviour[f'{mouse}-{sess}'] = (tracking.x[:stims.all[0]], speed[:stims.all[0]])
+        exploration_baselines_behaviour[f'{mouse}-{sess}'] = (tracking.x[:stims.all[0]][is_rec[:stims.all[0]]==1], 
+                                                            speed[:stims.all[0]][is_rec[:stims.all[0]]==1])
 
 
         exploration_baselines[f'{mouse}-{sess}'] = np.vstack(ess) # N rois by N frames exploration
@@ -283,7 +285,7 @@ for mouse in mice:
             # Plot speed and X baselines scaled
             _x, _s = minmax_scale(x, feature_range=(np.min(means), np.max(means))), minmax_scale(spd, feature_range=(np.min(means), np.max(means)))
             # ax.plot(time, _x, color=shelt_dist_color, lw=4, alpha=.2, zorder=20, label='X pos')
-            ax.plot(time, _s, color=speed_color, lw=4, alpha=.6, zorder=20, label='Speed')
+            # ax.plot(time, _s, color=speed_color, lw=4, alpha=.6, zorder=20, label='Speed')
 
             # Plot linear regression's prediction
             # ax.scatter(time, model.fittedvalues, color=[.5, .5, .5], s=45, zorder=90, alpha=.5)
@@ -333,9 +335,8 @@ for mouse in mice:
 
 
         # f2, ax2= plt.subplots(num=f'{mouse}-{sess}2')
-        f2 = plt.figure(figsize=(16, 8))
-        ax = f2.add_subplot(1, 2, 1)
-        ax2 = f2.add_subplot(1, 2, 2)
+        f2 = plt.figure(figsize=(8, 8))
+        ax = f2.add_subplot(1, 1, 1)
         f2.suptitle(f'Baseline variability PCA - {mouse} {sess} \n      red = late in session')
 
         # plot activity in PC space for each trial
@@ -361,19 +362,10 @@ for mouse in mice:
         PC = pca.transform(np.vstack(exploration_baselines[f'{mouse}-{sess}']).T)        
         sns.kdeplot(PC[:, 0], PC[:, 1], shade=True, ax=ax, shade_lowest=False, n_levels=10, label='exploration')
         ax.legend()
-
-        # Plot stuff for speed
-        expl_speed = exploration_baselines_behaviour[f'{mouse}-{sess}'][1]
-        plot_kde(data=expl_speed, ax=ax2, color=speed_color, label='exploration')
-        x, spd = behaviour_baselines[f'{mouse}-{sess}']
-        for s in spd:
-            ax2.hist([np.mean(s) for s in spd], bins=10, density=True)
-        ax2.legend()
-        
+      
 
         # Clean up
         ax.set(title='activity PCA', xlabel='PC1', ylabel='PC2')
-        ax2.set(title ='SPEED distribution', xlabel='speed', ylabel='density')
         clean_axes(f2)
         # set_figure_subplots_aspect(hspace=.6, top=.95, wspace=.25)
         save_figure(f2, str(save_fld/f'{mouse} {sess} PCA'))
@@ -385,4 +377,47 @@ for mouse in mice:
 
 
 # %%
-plt.hist([np.mean(s) for s in spd])
+"""
+    Look at first PC during exploration and 
+    compare to speed trace
+"""
+for mouse in mice:
+    for sess in sessions[mouse]:
+        bss = baselines[f'{mouse}-{sess}']
+        if bss is None: continue
+
+        pc = PCA(n_components=1).fit_transform(np.vstack(exploration_baselines[f'{mouse}-{sess}']).T) 
+        expl_x = exploration_baselines_behaviour[f'{mouse}-{sess}'][0]
+        expl_speed = exploration_baselines_behaviour[f'{mouse}-{sess}'][1]
+
+        in_shelt = np.ones_like(expl_x.ravel())
+        in_shelt[expl_x.ravel() > 300] = 0
+
+
+        f, axarr = plt.subplots(nrows=2, sharex=True, figsize=(16, 9))
+
+        data = pd.DataFrame(dict(pc=line_smoother(pc.ravel(), window_size=101), 
+                                x=line_smoother(expl_x, window_size=101), 
+                                in_shelt = np.cumsum(in_shelt),
+                                speed = line_smoother(expl_speed, window_size=101))).interpolate(axis=0)
+
+        plot_shaded_withline(axarr[0], np.arange(len(data)), minmax_scale(data.pc, feature_range=(0, 1)), 
+                                            alpha=.3, lw=2, label='pc', color=signal_color)
+        # axarr[0].plot(minmax_scale(data.speed, feature_range=(0, 1)), alpha=.4, label='speed')
+        axarr[0].plot(minmax_scale(data.x, feature_range=(0, 1)), alpha=.8, label='x', lw=3, zorder=100, color=speed_color)
+        
+        
+        plot_shaded_withline(axarr[1], np.arange(len(data)), data.in_shelt, alpha=.2, 
+                        color=shelt_dist_color,  label='in_shelt')
+        
+        axarr[0].legend()
+
+        axarr[0].set(title=f'{mouse} - {sess} - Pearson corr\n   x-PC {round(data.corr().x.pc, 3)}', ylabel='norm. values')
+        axarr[1].set(title='comulative time in shelter',ylabel='# frames', xlabel='frames')
+
+    #     break
+    # break
+
+
+
+# %%

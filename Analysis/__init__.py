@@ -2,15 +2,27 @@ from collections import namedtuple
 
 from vgatPAG.database.db_tables import *
 
-from Analysis.utils import get_mouse_session_data, get_shelter_threat_trips, get_session_stimuli_frames
+from Analysis.utils import (
+            get_mouse_session_data,
+            get_shelter_threat_trips,
+            get_session_stimuli_frames,
+            pxperframe_to_cmpersec,
+            compute_stationary_vs_locomoting)
 from Analysis.colors import *
 
+px_to_cm = 13.9
 
 # Get all mice
 mice = Mouse.fetch("mouse")
 
 # Get all sessions
 sessions = {m:(Session & f"mouse='{m}'").fetch("sess_name") for m in mice}
+
+mouse_sessions = []
+for mouse in mice:
+    for sess in sessions[mouse]:
+        mouse_sessions.append((mouse,
+                    sess, f'{mouse}-{sess}'))
 
 # Get the recordings for each session
 recordings = {m:{s:(Recording & f"sess_name='{s}'" & f"mouse='{m}'").fetch(as_dict=True) for s in sessions[m]} for m in mice}

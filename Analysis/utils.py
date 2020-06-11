@@ -1,8 +1,55 @@
 import numpy as np
 
 from vgatPAG.database.db_tables import *
+from scipy.ndimage.filters import gaussian_filter1d
+from behaviour.utilities.signals import get_times_signal_high_and_low
+
+# ------------------------------ Computing stuff ----------------------------- #
+def compute_stationary_vs_locomoting(speed, **kwargs):
+    """
+        Given a 1d numpy array with speed data, it returns a 1d numpy array which
+        is 1 when the mouse is locomoting and 0 otherwise. 
+        This is done by:
+            - convolving the speed trace with a gaussian to smooth
+            - Getting times of high vs low speed 
+            - ignoring brief intervals of locomotion/stationary
+    """
+
+    if len(speed.shape) > 1: raise ValueError('Invalid input')
+
+    guassian_sigma = kwargs.pop('gaussian_sigma', 6) # for smoothing
+    speed_threshold = kwargs.pop('speed_threshold', 1.5) # speed > th is locomotion
+    min_event_duration = kwargs.pop('min_event_duration', 10) #  events shorter than this are ignored
+
+    # Smooth, threshold and get events
+    smoothed = gaussian_filter1d(speed, guassian_sigma, mode='constant', cval=0)
+
+    is_moving = np.ones_like(smoothed)
+    is_moving[smoothed < speed_threshold] = 0
+
+    starts, ends = get_times_signal_high_and_low(is_moving, th=.5)
+    ends = [e for e in ends if e > starts[0]]
+
+    # Ignore fast locomotion events
+    for start, end in zip(starts, ends):
+        if end - start < min_event_duration:
+            is_moving[start:end+1] = 0
+
+    # Ignore fast stationary events
+    for start, end in zip(starts[1:], ends):
+        if start-end < min_event_duration:
+            is_moving[end:start+1] = 1
+
+    return is_moving
 
 
+# ----------------------------------- Misc ----------------------------------- #
+
+def pxperframe_to_cmpersec(pxperframe, fps=30, pxpercm=13.9):
+    return (pxperframe/pxpercm) * fps
+
+
+# ------------------------------- Data getters ------------------------------- #
 
 def get_session_stimuli_frames(mouse, sess, clean=True):
     """
