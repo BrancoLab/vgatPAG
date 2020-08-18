@@ -20,6 +20,7 @@ from Analysis  import (
         clean_stimuli,
         get_mouse_session_data,
         sessions_fps,
+        mouse_sessions,
 )
 
 from Analysis import (
@@ -45,7 +46,8 @@ from sklearn import preprocessing
 from vgatPAG.paths import output_fld
 output_fld = Path(output_fld)
 
-
+save_fld = output_fld / 'baseline'
+save_fld.mkdir(exist_ok=True)
 
 # %%
 '''
@@ -62,14 +64,13 @@ exploration_baselines = {} #  each ROIs baseline before the first stimulus
 exploration_baselines_behaviour = {}
 baselines = {}
 behaviour_baselines = {}
-for mouse in mice:
-    for sess in tqdm(sessions[mouse]):
+for mouse, sess, name in tqdm(mouse_sessions):
         frames_pre = N_sec_pre * sessions_fps[mouse][sess]
 
         # Prep data
-        stims = STIMS[f'{mouse}-{sess}']
+        stims = STIMS[name]
         if not len(stims.all): 
-            baselines[f'{mouse}-{sess}'] = None
+            baselines[name] = None
             continue
         tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
         
@@ -91,13 +92,13 @@ for mouse in mice:
             sig = signal[:stims.all[0]]
             ess.append(sig[is_rec[:stims.all[0]]==1])
 
-        exploration_baselines_behaviour[f'{mouse}-{sess}'] = (tracking.x[:stims.all[0]][is_rec[:stims.all[0]]==1], 
+        exploration_baselines_behaviour[name] = (tracking.x[:stims.all[0]][is_rec[:stims.all[0]]==1], 
                                                             speed[:stims.all[0]][is_rec[:stims.all[0]]==1])
 
 
-        exploration_baselines[f'{mouse}-{sess}'] = np.vstack(ess) # N rois by N frames exploration
-        baselines[f'{mouse}-{sess}'] = [np.vstack(bs) for bs in bss] # each rois bs array is N stim by N frames pre
-        behaviour_baselines[f'{mouse}-{sess}'] = (np.vstack(xss), np.vstack(sss)) # N stims by N frames
+        exploration_baselines[name] = np.vstack(ess) # N rois by N frames exploration
+        baselines[name] = [np.vstack(bs) for bs in bss] # each rois bs array is N stim by N frames pre
+        behaviour_baselines[name] = (np.vstack(xss), np.vstack(sss)) # N stims by N frames
 
 
 # %%
@@ -105,16 +106,15 @@ for mouse in mice:
     Fit PCA to the whole sessions recording
 """
 whole_sess_pca = {}
-for mouse in mice:
-    for sess in sessions[mouse]:
+for mouse, sess, name in tqdm(mouse_sessions):
         # Prep data
         tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
 
         signal = np.vstack([s[is_rec == 1] for s in signals]) # n rois by n frames
-        whole_sess_pca[f'{mouse}-{sess}'] = PCA(n_components=2).fit(signal.T)
+        whole_sess_pca[name] = PCA(n_components=2).fit(signal.T)
 
         # plt.figure()
-        # plt.plot(whole_sess_pca[f'{mouse}-{sess}'].explained_variance_ratio_)
+        # plt.plot(whole_sess_pca[name].explained_variance_ratio_)
 
 
 
@@ -133,65 +133,56 @@ N_sec_pre = 5
 N_sec_post = 8
 SHOW_MEAN = False
 
-for mouse in mice:
-    for sess in sessions[mouse]:
-        # Prep data
-        stims = stimuli[f'{mouse}-{sess}']
-        tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
+for mouse, sess, name in tqdm(mouse_sessions):
+    # Prep data
+    stims = stimuli[name]
+    tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
 
-        frames_pre = N_sec_pre * sessions_fps[mouse][sess]
-        frames_post = N_sec_post * sessions_fps[mouse][sess]
-        time = np.arange(-frames_pre, frames_post)
-
-        raise NotImplementedError('fix baselines usage')
-        baselines = [[] for i in np.arange(nrois)]
-
-        # Plot traces
-        f, axarr = plt.subplots(nrows=3 + nrois, figsize=(12, 24), sharex=True)
-        for stim in tqdm(stims.all):
-            try:
-                at_shelter = np.where(shelter_distance[stim:stim+frames_post] <= 0)[0][0] + stim + sessions_fps[mouse][sess]
-                _time = np.arange(-frames_pre, at_shelter-stim)
-            except:
-                continue
-                _time = time
-                at_shelter = stim+frames_post
-
-            axarr[0].plot(_time, shelter_distance[stim-frames_pre:at_shelter], c=shelt_dist_color,
-                        alpha=.8)
-            axarr[1].plot(_time, speed[stim-frames_pre:at_shelter], c=speed_color,
-                        alpha=.8)
-            axarr[2].plot(_time, ang_vel[stim-frames_pre:at_shelter], c=ang_vel_colr,
-                        alpha=.8)
-            
-            for n, ax in enumerate(axarr[3:]):
-                ax.plot(_time, signals[n][stim-frames_pre:at_shelter], c=signal_color, alpha=.3)
-                baselines[n].append(signals[n][stim-frames_pre:stim])
-
-        # Plt baselines
-        if SHOW_MEAN:
-            for n, baseline in enumerate(baselines):
-                mean = np.nanmean(np.vstack(baseline), axis=0)
-                std = np.std(np.vstack(baseline), axis=0)
-
-                plot_mean_and_error(mean, std, axarr[3+n], x=time, color=[.2, .2, .2], err_color=[.4, .4, .4])
+    frames_pre = N_sec_pre * sessions_fps[mouse][sess]
+    frames_post = N_sec_post * sessions_fps[mouse][sess]
+    time = np.arange(-frames_pre, frames_post)
 
 
-        # Clean up figure
-        ttls = ['Shelter distance', 'speed', 'angular velocity']
-        for n, ax in enumerate(axarr):
-            ax.axvline(0, lw=2, ls='--', color=[.4, .4, .4])
 
-            if n < len(ttls):
-                ttl = ttls[n]
-            else:
-                ttl = 'signal'
-            ax.set(ylabel=ttl)
+    # Plot traces
+    f, axarr = plt.subplots(nrows=3 , figsize=(16, 9), sharex=True)
+    f.suptitle(name)
+    for stim in stims.all:
+        try:
+            at_shelter = np.where(shelter_distance[stim:stim+frames_post] <= 0)[0][0] + stim + sessions_fps[mouse][sess]
+            _time = np.arange(-frames_pre, at_shelter-stim)
+        except:
+            continue
+            _time = time
+            at_shelter = stim+frames_post
 
-        axarr[-1].set(xlabel='frames')
-        clean_axes(f)
-        break
-    break
+        axarr[0].plot(_time, shelter_distance[stim-frames_pre:at_shelter], c=shelt_dist_color,
+                    alpha=.8)
+        axarr[1].plot(_time, speed[stim-frames_pre:at_shelter], c=speed_color,
+                    alpha=.8)
+        axarr[2].plot(_time, ang_vel[stim-frames_pre:at_shelter], c=ang_vel_colr,
+                    alpha=.8)
+        
+        # for n, ax in enumerate(axarr[3:]):
+        #     ax.plot(_time, signals[n][stim-frames_pre:at_shelter], c=signal_color, alpha=.3)
+
+
+    # Clean up figure
+    ttls = ['Shelter distance', 'speed', 'angular velocity']
+    for n, ax in enumerate(axarr):
+        ax.axvline(0, lw=2, ls='--', color=[.4, .4, .4])
+
+        if n < len(ttls):
+            ttl = ttls[n]
+        else:
+            ttl = 'signal'
+        ax.set(ylabel=ttl)
+
+    axarr[-1].set(xlabel='frames')
+    clean_axes(f)
+    save_figure(f, str(save_fld/f'{mouse} {sess} behav traces'))
+
+    # break
 
 # %%
 """
@@ -237,23 +228,21 @@ def get_exploration_mean_and_variance(expl, N, M=1):
 
 
 
-save_fld = output_fld / 'baseline'
-save_fld.mkdir(exist_ok=True)
+
 
 baseline_averages = {}
 
-for mouse in mice:
-    for sess in sessions[mouse]:
+for mouse, sess, name in tqdm(mouse_sessions):
         frames_pre = N_sec_pre * sessions_fps[mouse][sess]
 
         # Prep data, make figure
-        bss = baselines[f'{mouse}-{sess}']
+        bss = baselines[name]
         if bss is None: continue
 
         n_trials = bss[0].shape[0]
         n_rois = len(bss)
 
-        f, axarr = plt.subplots(nrows=6, ncols=4, sharex=True, sharey=False, figsize=(24, 10), num=f'{mouse}-{sess}')
+        f, axarr = plt.subplots(nrows=6, ncols=4, sharex=True, sharey=False, figsize=(24, 10), num=name)
         f.suptitle(f'Baseline variability - {mouse} {sess}')
         axarr = axarr.flatten()
         
@@ -261,7 +250,7 @@ for mouse in mice:
         colors = np.array([colorMap(i, 'Reds', vmin=-4, vmax=n_trials+4) for i in np.arange(n_trials)])
 
         # Get means for speed and X baselines
-        x, spd = behaviour_baselines[f'{mouse}-{sess}']
+        x, spd = behaviour_baselines[name]
         x, spd = np.nanmean(x, 1), np.nanmean(spd, 1)
 
 
@@ -291,7 +280,7 @@ for mouse in mice:
             # ax.scatter(time, model.fittedvalues, color=[.5, .5, .5], s=45, zorder=90, alpha=.5)
 
             # Plot exploration ROI mean activity
-            expl_mean, expl_sdt = get_exploration_mean_and_variance(exploration_baselines[f'{mouse}-{sess}'][n, :], n_trials*5, n_trials)
+            expl_mean, expl_sdt = get_exploration_mean_and_variance(exploration_baselines[name][n, :], n_trials*5, n_trials)
             plot_mean_and_error(expl_mean, expl_sdt, ax, x=time, color=[.2, .2, .2], err_color=[.4, .4, .4], label='expl mean')
 
             # Clean up axis
@@ -299,12 +288,12 @@ for mouse in mice:
                 ax.legend()
             ax.set(ylabel=f'ROI - {n}', xlabel='stimuli') # , ylim=[np.min(means)-50, np.max(means)+50])
 
-        baseline_averages[f'{mouse}-{sess}'] = pd.DataFrame(rois_means) # used for PCA
+        baseline_averages[name] = pd.DataFrame(rois_means) # used for PCA
 
 
         clean_axes(f)
 
-        plt.figure(f'{mouse}-{sess}')
+        plt.figure(name)
         set_figure_subplots_aspect(hspace=.6, top=.95, wspace=.25)
         save_figure(f, str(save_fld/f'{mouse} {sess} ROIs'))
 

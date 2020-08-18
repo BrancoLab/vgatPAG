@@ -3,7 +3,7 @@ from fcutils.plotting.colors import *
 
 # ---------------------------------- GENERAL --------------------------------- #
 miniscope_fps = 10
-shelter_width_px = 200
+shelter_width_px = 450
 
 # ------------------------------- FOR PLOTTING ------------------------------- #
 tc_colors = {

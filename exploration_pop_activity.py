@@ -108,20 +108,31 @@ for mouse, sess, name in tqdm(mouse_sessions):
     pcas_ca_data[name] = ca_data
     pcas_transformed[name] = pcas[name].transform(ca_data)
 
-
 # %%
+# PCA visualise variance explained
+f, axarr = plt.subplots(ncols=3, nrows=3, figsize=(16, 16))
+axarr = axarr.flatten()
+s = 0
+
 for mouse, sess, name in tqdm(mouse_sessions):
-    data = explorations[name]
-    if data is None: continue
-    f, ax = plt.subplots(figsize=(8, 4))
+    if explorations[name] is None:
+        axarr[s].axis('off')
+        s += 1
+        continue
 
-    s = data.loc[data.is_locomoting == 0]
-    l = data.loc[data.is_locomoting == 1]
+    data = explorations[name].loc[explorations[name].is_rec == 1.]
+    roi_cols = [c for c in data.columns if 'roi_' in c]
+    ca_data = data[roi_cols].values
 
-    ax.scatter(s.x, s.y, color='g', alpha=.2, zorder=100)
-    ax.scatter(l.x, l.y, color='r', alpha=.2)
+    pca = PCA(n_components=8).fit(ca_data)
 
-    break
+    ratios = pca.explained_variance_ratio_
+
+    axarr[s].plot(np.arange(8), pca.explained_variance_ratio_, 'o-', lw=2, color='k',)
+    axarr[s].set(title=name, xlabel='PCs', ylabel='explained variance ratio')
+    s += 1
+
+clean_axes(f)
 
 
 # %%
@@ -177,11 +188,11 @@ for mouse, sess, name in tqdm(mouse_sessions):
     if pcas[name] is None: continue
 
     # Plot KDE of whole PCA trace
-    # sns.kdeplot(pcas_transformed[name][:, 0], pcas_transformed[name][:, 1], alpha=.1, cmap='gray', lw=0,
-    #             shade=True, ax=axarr[s], shade_lowest=False, n_levels=20)
+    sns.kdeplot(pcas_transformed[name][:, 0], pcas_transformed[name][:, 1], alpha=.1, cmap='gray', lw=0,
+                shade=True, ax=axarr[s], shade_lowest=False, n_levels=20)
 
     # Prep data
-    N = 250
+    N = 500
     data = explorations[name].loc[explorations[name].is_rec == 1.]
     roi_cols = [c for c in data.columns if 'roi_' in c]
 
@@ -213,7 +224,7 @@ for mouse, sess, name in tqdm(mouse_sessions):
 
         accuracy, svc = fit_svc_binary(X, y)
         plot_svc_boundaries(axarr[s], svc)
-        axarr[s].set(title=name+f' svm accuracy: {round(accuracy, 2)}\n avg runn speed = {round(data.s.mean(), 2)}', 
+        axarr[s].set(title=name+f' svm accuracy: {round(accuracy, 2)}\n avg runn speed = {round(data.s.mean(), 2)}\n nrois:{len(roi_cols)}', 
                         xlabel='PC1', ylabel='PC2')
 
 
@@ -223,7 +234,7 @@ for mouse, sess, name in tqdm(mouse_sessions):
     s += 1
 
     # break
-
+# 
 
 axarr[-1].axis('off')
 

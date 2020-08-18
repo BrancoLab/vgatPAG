@@ -367,7 +367,7 @@ class Trackings(dj.Imported):
         ang_vel[ang_vel > np.percentile(ang_vel, 99)] = np.nan
         ang_vel[ang_vel < np.percentile(ang_vel, 1)] = np.nan
 
-        shelter_distance = body_tracking[0, :]-shelter_width_px-200
+        shelter_distance = body_tracking[0, :]-shelter_width_px
 
         return body_tracking, ang_vel, speed, shelter_distance
 
