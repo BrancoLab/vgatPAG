@@ -113,7 +113,7 @@ class Recording(dj.Imported): #  In each session there might be multiple recordi
             else: ai = ais[0]    
 
             # Open video and get number of frames
-            nframes, width, height, fps = get_video_params(get_cap_from_file(os.path.join(session_fld, video)))
+            nframes, width, height, fps, _ = get_video_params(get_cap_from_file(os.path.join(session_fld, video)))
 
             # Open AI file and get number of samples
             f, keys, subkeys, allkeys = open_hdf(os.path.join(session_fld, ai))
@@ -294,7 +294,6 @@ class Trackings(dj.Imported):
             ---
             orientation: longblob
             angular_velocity: longblob
-            bone_length: longblob
         """
 
     # Populate method
@@ -341,7 +340,6 @@ class Trackings(dj.Imported):
 
             	segment_key['orientation'] = bones_tracking[bone]['orientation'].values
             	segment_key['angular_velocity'] = bones_tracking[bone]['angular_velocity'].values
-            	segment_key['bone_length'] = bones_tracking[bone]['bone_length'].values
 
             	self.BodySegmentTracking.insert1(segment_key)
 
@@ -562,7 +560,7 @@ class Event(dj.Imported):
         max_event_duration = self.max_event_duration * fps
 
         # Get stimuli
-        vstims, astims = Recording().get_recording_stimuli_clean(**key)
+        vstims, astims = Recording().get_recording_stimuli(**key)
 
         # Get tracking
         body_tracking, ang_vel, speed, shelter_distance = Trackings().get_recording_tracking_clean(**key)

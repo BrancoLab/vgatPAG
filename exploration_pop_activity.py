@@ -244,7 +244,7 @@ save_figure(f, str(save_fld / f'Shelter representation {"stationary" if KEEP_ONL
 
 
 # %%
-# Fir a SVM to predict X position in 3 bins
+# Fit a SVM to predict X position in 3 bins
 
 f, axarr = plt.subplots(ncols=3, nrows=3, figsize=(16, 16))
 axarr = axarr.flatten()

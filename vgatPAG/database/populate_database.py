@@ -23,12 +23,13 @@ Recording.populate()
 
 
 # -------------------------------- Pop Stimuli ------------------------------- #
-VisualStimuli.populate()
-AudioStimuli.populate()
+print("Stimuli")
+VisualStimuli.populate(display_progress=True)
+AudioStimuli.populate(display_progress=True)
 
 # ----------------------- Pop AI, metadata and stimuli ----------------------- #
 print("Populating Tiff Times")
-TiffTimes.populate()
+TiffTimes.populate(display_progress=True)
 
 
 # --------------------------------- Tracking --------------------------------- #
@@ -38,7 +39,7 @@ Trackings.populate(display_progress=True)
 
 # ---------------------------------- Pop ROI --------------------------------- #
 print("Popualte ROIs")
-Roi.populate()
+Roi.populate(display_progress=True)
 
 
 # -------------------------------- Pop events -------------------------------- #
@@ -46,9 +47,9 @@ print("Popualte Events")
 Event.populate(display_progress=True)
 
 # # ---------------------------- Pop manually curate --------------------------- #
-# print("Populate manually curated data")
-# ManualTrials.populate()
-# ManualROIs.populate(display_progress=True)
+print("Populate manually curated data")
+ManualTrials.populate()
+ManualROIs.populate(display_progress=True)
 
-# print(ManualROIs())
+print(ManualROIs())
 
