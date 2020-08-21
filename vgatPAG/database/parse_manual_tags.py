@@ -6,7 +6,7 @@ import pandas as pd
 from vgatPAG.database.db_tables import Session, Recording
 from pathlib import Path
 from fcutils.video.utils import trim_clip
-
+import numpy as np
 
 def parse_manual_tags_file():
 
@@ -25,11 +25,11 @@ def parse_manual_tags_file():
         event_type = [],
         tag_type = [],
         frame = [],
+        session_frame = [],
         stim_frame = [],
     )
 
-
-    def add_entry_tags(events, event_type, mouse, sess_name, rec_number):
+    def add_entry_tags(events, event_type, mouse, sess_name, rec_number, rec_idx):
         for event in list(events): # loop over frame_xxx video
             if 'TagData' not in list(events[event]):
                 continue
@@ -42,12 +42,20 @@ def parse_manual_tags_file():
                     stimframe = int(event.split('_')[-1])
                     framen = int(((time / 1000)-20) * 30) + stimframe
 
+                    # Get the frame number from the start of the session
+                    if rec_idx == 0:
+                        framen_sess = framen
+                    else:
+                        n_frames = np.cumsum((Recording & f"sess_name='{sess_name}'" & f"mouse='{mouse}'").fetch('n_frames'))
+                        framen_sess = framen + n_frames[rec_idx-1]
+
                     tags['mouse'].append(mouse)
                     tags['sess_name'].append(sess_name)
                     tags['rec_number'].append(rec_number)
                     tags['event_type'].append(event_type)
                     tags['tag_type'].append(tn)
                     tags['frame'].append(framen)
+                    tags['session_frame'].append(framen_sess)
                     tags['stim_frame'].append(stimframe)
 
 
@@ -69,7 +77,7 @@ def parse_manual_tags_file():
                 else:
                     tnum = 0
                 add_entry_tags(f['all'][ev][entries[0]],
-                                ev, sess.mouse, sess.sess_name, tnum)
+                                ev, sess.mouse, sess.sess_name, tnum, 0)
             elif entries:
                 trials = []
                 for entry in entries:
@@ -79,11 +87,11 @@ def parse_manual_tags_file():
                 if len(set(trials)) == 1:
                     for entry in entries:
                         add_entry_tags(f['all'][ev][entry],
-                                ev, sess.mouse, sess.sess_name, trials[0])
+                                ev, sess.mouse, sess.sess_name, trials[0], trials[0])
                 else:
-                    for entry, tnum in zip(entries, trials):
+                    for nt, (entry, tnum) in enumerate(zip(entries, trials)):
                         add_entry_tags(f['all'][ev][entry],
-                                ev, sess.mouse, sess.sess_name, tnum)
+                                ev, sess.mouse, sess.sess_name, tnum, nt)
 
 
     return pd.DataFrame(tags)

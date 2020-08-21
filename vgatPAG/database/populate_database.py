@@ -32,13 +32,12 @@ from vgatPAG.database.dj_config import manual_insert_skip_duplicate
 # TiffTimes.populate(display_progress=True)
 
 
-# ----------------------------- Manual behav tags ---------------------------- #
-print('Populating behaviour tags')
+# # ----------------------------- Manual behav tags ---------------------------- #
+# print('Populating behaviour tags')
 # ManualBehaviourTags.drop()
 ManualBehaviourTags.populate(display_progress=True)
-print(ManualBehaviourTags.Tags())
 
-# --------------------------------- Tracking --------------------------------- #
+# # --------------------------------- Tracking --------------------------------- #
 # print("Populating Tracking")
 # Trackings.populate(display_progress=True)
 
@@ -52,7 +51,7 @@ print(ManualBehaviourTags.Tags())
 # print("Popualte Events")
 # Event.populate(display_progress=True)
 
-# # # ---------------------------- Pop manually curate --------------------------- #
+# # ---------------------------- Pop manually curate --------------------------- #
 # print("Populate manually curated data")
 # ManualTrials.populate()
 # ManualROIs.populate(display_progress=True)
