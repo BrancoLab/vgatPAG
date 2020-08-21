@@ -7,6 +7,7 @@ import seaborn as sns
 from pathlib import Path
 from random import choices
 import palettable
+from sklearn.linear_model import LogisticRegression
 
 from Analysis  import (
         mice,
@@ -183,7 +184,7 @@ axarr = axarr.flatten()
 s = 0
 f.suptitle(f'Shelter representation')
 
-
+overal_accuracies = {}
 for mouse, sess, name in tqdm(mouse_sessions):
     if pcas[name] is None: continue
 
@@ -227,7 +228,7 @@ for mouse, sess, name in tqdm(mouse_sessions):
         axarr[s].set(title=name+f' svm accuracy: {round(accuracy, 2)}\n avg runn speed = {round(data.s.mean(), 2)}\n nrois:{len(roi_cols)}', 
                         xlabel='PC1', ylabel='PC2')
 
-
+        overal_accuracies[name] = accuracy
 
     # Clean axes
     axarr[s].legend()
@@ -242,7 +243,140 @@ clean_axes(f)
 set_figure_subplots_aspect(hspace=.6, top=.9, wspace=.25)
 save_figure(f, str(save_fld / f'Shelter representation {"stationary" if KEEP_ONLY_STATIONARY else ""} {PREDICT}'))
 
+# %%
+# Fit SVM to individual ROIs
+f, axarr = plt.subplots(ncols=3, nrows=3, figsize=(16, 16))
+axarr = axarr.flatten()
+s = 0
+f.suptitle(f'individual ROI SVM accuracy (shelter detection)')
 
+
+for mouse, sess, name in tqdm(mouse_sessions):
+    if pcas[name] is None: continue
+
+    # Prep data
+    N = 500
+    data = explorations[name].loc[explorations[name].is_rec == 1.]
+    roi_cols = [c for c in data.columns if 'roi_' in c]
+
+    if KEEP_ONLY_STATIONARY:
+        data = data.loc[data.is_locomoting == 0]
+
+    # split between in/out shelter
+    A = data.loc[data.in_shelter == 1]
+    B = data.loc[data.in_shelter == 0]
+    A_label, B_label = 'IN', 'OUT'
+
+
+    # for each ROI
+    accuracies = []
+    for rn, roic in enumerate(roi_cols):
+        A_sig = A[roic].sample(N).values
+        B_sig = B[roic].sample(N).values
+
+        # Crete data and labels arrays
+        X = np.hstack([A_sig, B_sig]).reshape(-1, 1)
+        y = np.zeros(len(X))
+        y[:len(A_pc)] = 1
+
+        accuracy, svc = fit_svc_binary(X, y, max_iter=10000000)
+        accuracies.append(accuracy)
+
+    axarr[s].bar(np.arange(len(accuracies)), accuracies, color='k')
+    axarr[s].set(title=name + f'\n Pop. level SVM, accuracy: {round(overal_accuracies[name], 2)}', 
+                xlabel='ROI', 
+                xticklabels=[r.split('_')[-1] for r in roi_cols],
+                xticks=np.arange(len(accuracies)),
+                ylabel='accuracy', ylim=[0,1])
+    axarr[s].axhline(.5, ls='--', lw=1, zorder=99, color='r')
+    axarr[s].axhline(overal_accuracies[name], lw=5, zorder=90, color='w')
+    axarr[s].axhline(overal_accuracies[name], ls='--', lw=3, zorder=99, color='g')
+    s += 1
+
+axarr[-1].axis('off')
+
+clean_axes(f)
+set_figure_subplots_aspect(hspace=.6, top=.92, wspace=.25)
+save_figure(f, str(save_fld / f'Shelter representation single ROIs'))
+
+
+# %%
+# For each ROI plot the mean activity when the mouse is in or out of the shelter
+f, axarr = plt.subplots(ncols=3, nrows=3, figsize=(16, 16))
+axarr = axarr.flatten()
+s = 0
+f.suptitle(f'individual ROI SVM accuracy (shelter detection)')
+
+fld = Path('/Users/federicoclaudi/Dropbox (UCL - SWC)/Project_vgatPAG/analysis/doric/Fede/plots/baseline/SINGLE_ROI_TRACES')
+
+deltas = []
+for mouse, sess, name in tqdm(mouse_sessions):
+    if pcas[name] is None: continue
+
+    # Prep data
+    data = explorations[name].loc[explorations[name].is_rec == 1.]
+    roi_cols = [c for c in data.columns if 'roi_' in c]
+
+    if KEEP_ONLY_STATIONARY:
+        data = data.loc[data.is_locomoting == 0]
+
+    # split between in/out shelter
+    A = data.loc[data.in_shelter == 1]
+    B = data.loc[data.in_shelter == 0]
+    N = np.min([len(A), len(B)])
+    A_label, B_label = 'IN', 'OUT'
+
+
+    # for each ROI
+    accuracies = []
+    for rn, roic in enumerate(roi_cols):
+        A_sig = np.median(A[roic].sample(N).values)
+        B_sig = np.median(B[roic].sample(N).values)
+
+        # save a figure with single ROI's traces
+        # f2, ax = plt.subplots(figsize=(12, 8))
+        # ax.scatter(A[roic].index.values, A[roic].values, color='r', label=A_label, s=2, alpha=.8)
+        # ax.scatter(B[roic].index.values, B[roic].values, color='b', label=B_label, s=2, alpha=.8)
+        # ax.axhline(A_sig, color='r')
+        # ax.axhline(B_sig, color='b')
+        # ax.legend()
+        # ax.set(title=name+'_'+roic, xlabel='Frames', ylabel='signal')
+        # clean_axes(f2)
+        # save_figure(f2, str(fld / (name+'_'+roic)), verbose=False)
+        # plt.close(f2)
+
+        # save a figure with logistic regression
+        X = np.hstack([A[roic].values, B[roic].values]).reshape(-1, 1)
+        y = np.hstack([np.ones(len(A[roic])), np.zeros(len(B[roic]))])
+        lr = LogisticRegression().fit(X, y.ravel())
+        f2, ax2 = plt.subplots(figsize=(12, 8))
+        ax2.scatter(A[roic].values, [1 for i in A[roic]], color='r', label=A_label, s=5, alpha=.8, zorder=99)
+        ax2.scatter(B[roic].values, [0 for i in B[roic]], color='b', label=B_label, s=5, alpha=.8, zorder=99)
+        ax2.scatter(X, lr.predict_proba(X)[:, 1], s=1, alpha=.8)
+        clean_axes(f2)
+        save_figure(f2, str(fld / (name+'_'+roic+'logreg')), verbose=False)
+        plt.close(f2)
+
+        x = [rn-.1, rn+.1]
+        axarr[s].plot(x, [A_sig, B_sig], lw=2, color='k')
+        axarr[s].scatter(x, [A_sig, B_sig], 
+                            s=50, c=['r', 'b'], linewidths=2, edgecolors ='k', zorder=99)
+
+        deltas.append(A_sig - B_sig)
+
+
+    axarr[s].set(
+            title=name, 
+            xlabel='ROI',
+            xticklabels=[r.split('_')[-1] for r in roi_cols],
+            xticks=np.arange(len(roi_cols)),
+            ylabel='red in blue out'
+            # ylabel=r'$\frac{IN - OUT}{IN + OUT}$'
+            )
+
+    s += 1
+_ = axarr[-1].hist(deltas, bins=20, density=True)
+_ = axarr[-1].set(xlim=[-100, 100])
 # %%
 # Fit a SVM to predict X position in 3 bins
 

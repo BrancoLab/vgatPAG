@@ -15,41 +15,46 @@ from vgatPAG.database.dj_config import manual_insert_skip_duplicate
 
 
 
-# --------------------------- Pop Mouse and Session -------------------------- #
-print("Populating sessions")
-Mouse.populate()
-Session.populate()
-Recording.populate()
+# # --------------------------- Pop Mouse and Session -------------------------- #
+# print("Populating sessions")
+# Mouse.populate()
+# Session.populate()
+# Recording.populate()
 
 
-# -------------------------------- Pop Stimuli ------------------------------- #
-print("Stimuli")
-VisualStimuli.populate(display_progress=True)
-AudioStimuli.populate(display_progress=True)
+# # -------------------------------- Pop Stimuli ------------------------------- #
+# print("Stimuli")
+# VisualStimuli.populate(display_progress=True)
+# AudioStimuli.populate(display_progress=True)
 
-# ----------------------- Pop AI, metadata and stimuli ----------------------- #
-print("Populating Tiff Times")
-TiffTimes.populate(display_progress=True)
+# # ----------------------- Pop AI, metadata and stimuli ----------------------- #
+# print("Populating Tiff Times")
+# TiffTimes.populate(display_progress=True)
 
+
+# ----------------------------- Manual behav tags ---------------------------- #
+print('Populating behaviour tags')
+# ManualBehaviourTags.drop()
+ManualBehaviourTags.populate(display_progress=True)
+print(ManualBehaviourTags.Tags())
 
 # --------------------------------- Tracking --------------------------------- #
-print("Populating Tracking")
-Trackings.populate(display_progress=True)
+# print("Populating Tracking")
+# Trackings.populate(display_progress=True)
 
 
-# ---------------------------------- Pop ROI --------------------------------- #
-print("Popualte ROIs")
-Roi.populate(display_progress=True)
+# # ---------------------------------- Pop ROI --------------------------------- #
+# print("Popualte ROIs")
+# Roi.populate(display_progress=True)
 
 
-# -------------------------------- Pop events -------------------------------- #
-print("Popualte Events")
-Event.populate(display_progress=True)
+# # -------------------------------- Pop events -------------------------------- #
+# print("Popualte Events")
+# Event.populate(display_progress=True)
 
-# # ---------------------------- Pop manually curate --------------------------- #
-print("Populate manually curated data")
-ManualTrials.populate()
-ManualROIs.populate(display_progress=True)
+# # # ---------------------------- Pop manually curate --------------------------- #
+# print("Populate manually curated data")
+# ManualTrials.populate()
+# ManualROIs.populate(display_progress=True)
 
-print(ManualROIs())
 

@@ -6,7 +6,6 @@ import os
 from scipy.signal import medfilt as median_filter
 import matplotlib.pyplot as plt
 
-
 from behaviour.tracking.tracking import prepare_tracking_data, compute_body_segments
 from behaviour.utilities.signals import get_times_signal_high_and_low
 
@@ -171,6 +170,53 @@ class Recording(dj.Imported): #  In each session there might be multiple recordi
             return np.min(np.hstack([vstims, astims]))
         
 
+@schema
+class ManualBehaviourTags(dj.Imported):
+    definition = """
+        # manual tagging of behaviour from videos by Vanessa
+        -> Recording
+    """
+    filepath = '/Users/federicoclaudi/Dropbox (UCL - SWC)/Project_vgatPAG/analysis/doric/VGAT_summary/VGAT_summary_tagData.hdf5'
+
+    class Tags(dj.Part):
+        definition = """
+            -> ManualBehaviourTags
+            event_type: varchar(64)
+            tag_type: varchar(64)
+            frame: int
+            ---
+            stim_frame: int
+            rec_n: int
+        """
+
+    def _make_tuples(self, key):
+        tags = pd.read_hdf('vgatPAG/database/manual_tags.h5')
+
+        # Get tags for the recording
+        # rec = (Recording & f'mouse="{mouse}"' & f"sess_name='{sess}'" & f'rec_n={}')
+        tags = tags.loc[(tags.mouse == key['mouse'])&
+                        (tags.sess_name == key['sess_name'])]
+        
+        # Make an entry in the main class
+        manual_insert_skip_duplicate(self, key)
+
+        # Loop over event types
+        for ev in tags.event_type.unique():
+            # Loop over tag type
+            for tt in tags.loc[tags.event_type == ev].tag_type.unique():
+                _tags = tags.loc[(tags.event_type == ev)&(tags.tag_type == tt)]
+
+
+                # Create an entry for each tag
+                for i, row in _tags.iterrows():
+                    rkey= key.copy()
+                    rkey['event_type'] = row.event_type
+                    rkey['tag_type'] = row.tag_type
+                    rkey['frame'] = row.frame
+                    rkey['stim_frame'] = row.stim_frame
+                    rkey['rec_n'] = row.rec_number
+
+                    manual_insert_skip_duplicate(self.Tags, rkey)
 
 
 @schema
