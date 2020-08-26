@@ -3,7 +3,7 @@ sys.path.append('./')
 
 from fcutils.file_io.io import open_hdf
 import pandas as pd
-from vgatPAG.database.db_tables import Session, Recording
+from vgatPAG.database.db_tables import Session, Recording, Trackings, get_session_folder
 from pathlib import Path
 from fcutils.video.utils import trim_clip
 import numpy as np
@@ -12,8 +12,8 @@ def parse_manual_tags_file():
 
     tags_names = ['VideoTag_A', 'VideoTag_B', 'VideoTag_E', 'VideoTag_H', 'VideoTag_L']
 
-    filepath = '/Users/federicoclaudi/Dropbox (UCL - SWC)/Project_vgatPAG/analysis/doric/VGAT_summary/VGAT_summary_tagData.hdf5'
-
+    # filepath = '/Users/federicoclaudi/Dropbox (UCL - SWC)/Project_vgatPAG/analysis/doric/VGAT_summary/VGAT_summary_tagData.hdf5'
+    filepath = 'D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\VGAT_summary\\VGAT_summary_tagData.hdf5'
 
     f, keys, subkeys, all_keys = open_hdf(filepath)
     events_types = subkeys['all']
@@ -29,7 +29,11 @@ def parse_manual_tags_file():
         stim_frame = [],
     )
 
-    def add_entry_tags(events, event_type, mouse, sess_name, rec_number, rec_idx):
+    def add_entry_tags(events, event_type, mouse, sess_name, rec_number, rec_idx):        
+        # Get total number of frames
+        n_frames = np.cumsum((Recording & f"sess_name='{sess_name}'" & f"mouse='{mouse}'").fetch('n_frames'))
+
+
         for event in list(events): # loop over frame_xxx video
             if 'TagData' not in list(events[event]):
                 continue
@@ -46,8 +50,12 @@ def parse_manual_tags_file():
                     if rec_idx == 0:
                         framen_sess = framen
                     else:
-                        n_frames = np.cumsum((Recording & f"sess_name='{sess_name}'" & f"mouse='{mouse}'").fetch('n_frames'))
                         framen_sess = framen + n_frames[rec_idx-1]
+
+                    if framen_sess > np.sum(n_frames):
+                        R = (Recording & f"sess_name='{sess_name}'" & f"mouse='{mouse}'").fetch("rec_name")
+                        raise ValueError('Something went wrong when computing session frame number.\n'+
+                                        f'{R}')
 
                     tags['mouse'].append(mouse)
                     tags['sess_name'].append(sess_name)
@@ -61,6 +69,9 @@ def parse_manual_tags_file():
 
     # loop over each session
     for i, sess in pd.DataFrame(Session().fetch()).iterrows():
+        if sess.mouse == 'BF164p1':
+            print(sess.sess_name)
+            a = 1
         name = sess.mouse+'_'+sess.sess_name
 
         # loop over each event type (e.g. UltrasoundLoom)
@@ -85,9 +96,15 @@ def parse_manual_tags_file():
                     trials.append(int(entry[idx+2:idx+3]))
                 
                 if len(set(trials)) == 1:
+                    t = entry[idx:idx+3]
+                    recnames = (Recording & f"sess_name='{sess.sess_name}'" & f"mouse='{sess.mouse}'").fetch('rec_name')
+                    tridx = [j for j,name in enumerate(recnames) if t in name]
+                    if len(tridx) != 1:
+                        raise ValueError
+
                     for entry in entries:
                         add_entry_tags(f['all'][ev][entry],
-                                ev, sess.mouse, sess.sess_name, trials[0], trials[0])
+                                ev, sess.mouse, sess.sess_name, trials[0], tridx[0]+1)
                 else:
                     for nt, (entry, tnum) in enumerate(zip(entries, trials)):
                         add_entry_tags(f['all'][ev][entry],
@@ -97,7 +114,8 @@ def parse_manual_tags_file():
     return pd.DataFrame(tags)
 
 def make_videos():
-    savefld = Path('/Users/federicoclaudi/Dropbox (UCL - SWC)/Project_vgatPAG/analysis/doric/Fede/manual_tag_videos')
+    # savefld = Path('/Users/federicoclaudi/Dropbox (UCL - SWC)/Project_vgatPAG/analysis/doric/Fede/manual_tag_videos')
+    savefld = Path(r'D:\Dropbox (UCL - SWC)\Project_vgatPAG\analysis\doric\Fede\manual_tag_videos')
 
     tag_type = 'VideoTag_B'
     loom_escapes = tags.loc[(tags.event_type == 'Loom_Escape')&(tags.tag_type == tag_type)]
@@ -133,3 +151,5 @@ def make_videos():
 if __name__ == '__main__':
     tags = parse_manual_tags_file()
     tags.to_hdf('vgatPAG/database/manual_tags.h5', key='h5')
+
+    make_videos()

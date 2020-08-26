@@ -122,6 +122,13 @@ def get_mouse_session_data(mouse, session, sessions):
     tracking = pd.DataFrame(dict(x = body_tracking[0, :], y=body_tracking[1, :], s=body_tracking[1, :])).interpolate()
 
     # Make sure stuff has right length
+    tot_frames = np.sum([
+            (Recording & f'rec_name="{r}"').fetch1('n_frames') for r in recs
+    ])
+    if len(tracking) != tot_frames:
+        raise ValueError(f'Incorrect # frames for tracking: {len(tracking)} instead of {tot_frames}')
+
+
     clean_signal = []
     for sig in signals:
         if len(sig) < len(tracking):

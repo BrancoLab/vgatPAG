@@ -4,6 +4,7 @@
 
 import sys
 sys.path.append("./")
+import os 
 
 from vgatPAG.paths import mice_folders, dlc_config_file
 from vgatPAG.database.tables import *

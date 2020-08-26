@@ -11,7 +11,7 @@ from vgatPAG.database.dj_config import manual_insert_skip_duplicate
 """
     Creates a datajoint dabase from the summary .hdf file to facilitate files handling
 """
-# TiffTimes.drop()
+# ManualBehaviourTags.drop()
 
 
 
@@ -34,7 +34,6 @@ from vgatPAG.database.dj_config import manual_insert_skip_duplicate
 
 # # ----------------------------- Manual behav tags ---------------------------- #
 # print('Populating behaviour tags')
-# ManualBehaviourTags.drop()
 ManualBehaviourTags.populate(display_progress=True)
 
 # # --------------------------------- Tracking --------------------------------- #
