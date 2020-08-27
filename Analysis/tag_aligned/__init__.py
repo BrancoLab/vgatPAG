@@ -9,6 +9,9 @@ manual_tags = pd.DataFrame((ManualBehaviourTags.Tags).fetch())
 def get_tags_by(**kwargs):
     tags = manual_tags.copy()
     for key, value in kwargs.items():
-        tags = tags.loc[tags[key] == value]
+        if isinstance(value, list):
+            tags = tags.loc[tags[key].isin(value)]
+        else:
+            tags = tags.loc[tags[key] == value]
 
     return tags

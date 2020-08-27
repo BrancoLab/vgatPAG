@@ -1,7 +1,7 @@
 import sys
 sys.path.append('./')
 
-from fcutils.file_io.io import open_hdf
+from fcutils.file_io.io import open_hdf, load_yaml
 import pandas as pd
 from vgatPAG.database.db_tables import Session, Recording, Trackings, get_session_folder
 from pathlib import Path
@@ -9,8 +9,8 @@ from fcutils.video.utils import trim_clip
 import numpy as np
 
 def parse_manual_tags_file():
-
-    tags_names = ['VideoTag_A', 'VideoTag_B', 'VideoTag_E', 'VideoTag_H', 'VideoTag_L']
+    tags_names = ['VideoTag_A', 'VideoTag_B', 'VideoTag_C', 'VideoTag_D',
+                    'VideoTag_E', 'VideoTag_F', 'VideoTag_G', 'VideoTag_H', 'VideoTag_L']
 
     # filepath = '/Users/federicoclaudi/Dropbox (UCL - SWC)/Project_vgatPAG/analysis/doric/VGAT_summary/VGAT_summary_tagData.hdf5'
     filepath = 'D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\VGAT_summary\\VGAT_summary_tagData.hdf5'
@@ -26,7 +26,8 @@ def parse_manual_tags_file():
         tag_type = [],
         frame = [],
         session_frame = [],
-        stim_frame = [],
+        session_stim_frame = [],
+        stim_frame=[],
     )
 
     def add_entry_tags(events, event_type, mouse, sess_name, rec_number, rec_idx):        
@@ -46,11 +47,25 @@ def parse_manual_tags_file():
                     stimframe = int(event.split('_')[-1])
                     framen = int(((time / 1000)-20) * 30) + stimframe
 
+                    # CHECK IF WE should excude this
+                    if 'B' in tn:
+                        ignore_trials = load_yaml('vgatPAG\database\manual_tags_exclude.yml')
+                        name = f'{mouse}_{sess_name}_t{rec_number}_{framen}'
+                        if name in ignore_trials:
+                            print('excluding trials from ', name)
+                            continue
+
                     # Get the frame number from the start of the session
+                    if mouse == 'BF164p1' and sess_name == '19JUN18':
+                        rec_number = 1
+                        rec_idx = 1
+
                     if rec_idx == 0:
                         framen_sess = framen
+                        session_stim_frame = stimframe
                     else:
                         framen_sess = framen + n_frames[rec_idx-1]
+                        session_stim_frame = stimframe + n_frames[rec_idx-1]
 
                     if framen_sess > np.sum(n_frames):
                         R = (Recording & f"sess_name='{sess_name}'" & f"mouse='{mouse}'").fetch("rec_name")
@@ -65,13 +80,11 @@ def parse_manual_tags_file():
                     tags['frame'].append(framen)
                     tags['session_frame'].append(framen_sess)
                     tags['stim_frame'].append(stimframe)
+                    tags['session_stim_frame'].append(session_stim_frame)
 
 
     # loop over each session
     for i, sess in pd.DataFrame(Session().fetch()).iterrows():
-        if sess.mouse == 'BF164p1':
-            print(sess.sess_name)
-            a = 1
         name = sess.mouse+'_'+sess.sess_name
 
         # loop over each event type (e.g. UltrasoundLoom)
@@ -94,8 +107,11 @@ def parse_manual_tags_file():
                 for entry in entries:
                     idx = entry.index('_t')
                     trials.append(int(entry[idx+2:idx+3]))
+                trials = list(set(trials))
                 
                 if len(set(trials)) == 1:
+                    if sess.mouse != 'BF164p1':
+                        raise NotImplementedError('This has only been tested for one mouse')
                     t = entry[idx:idx+3]
                     recnames = (Recording & f"sess_name='{sess.sess_name}'" & f"mouse='{sess.mouse}'").fetch('rec_name')
                     tridx = [j for j,name in enumerate(recnames) if t in name]
@@ -121,9 +137,10 @@ def make_videos():
     loom_escapes = tags.loc[(tags.event_type == 'Loom_Escape')&(tags.tag_type == tag_type)]
     # loop over each mouse
     for mouse in loom_escapes.mouse.unique():
-
         # loop over each session
         for sess in loom_escapes.loc[loom_escapes.mouse==mouse].sess_name.unique():
+            
+
             sess_data = loom_escapes.loc[(loom_escapes.mouse==mouse)&(loom_escapes.sess_name==sess)]
 
             tracking = pd.DataFrame((Trackings * Trackings.BodyPartTracking & 'bp="body"' 
@@ -134,7 +151,11 @@ def make_videos():
                 events = sess_data.loc[sess_data.rec_number == recn]
 
                 # Get recording video:
-                recv = (Recording & f'mouse="{mouse}"' & f"sess_name='{sess}'" & f"rec_n={n}").fetch1('videofile')
+                if mouse == 'BF164p1' and sess == '19JUN18':
+                    idx = recn
+                else:
+                    idx = n
+                recv = (Recording & f'mouse="{mouse}"' & f"sess_name='{sess}'" & f"rec_n={idx}").fetch1('videofile')
                 recv = Path(get_session_folder(mouse, sess)) / recv
                 
                 # loop over each event
@@ -152,4 +173,4 @@ if __name__ == '__main__':
     tags = parse_manual_tags_file()
     tags.to_hdf('vgatPAG/database/manual_tags.h5', key='h5')
 
-    make_videos()
+    # make_videos()

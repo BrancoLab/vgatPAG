@@ -187,6 +187,7 @@ class ManualBehaviourTags(dj.Imported):
             session_frame: int
             ---
             stim_frame: int
+            session_stim_frame: int
             rec_n: int
         """
 
@@ -216,6 +217,7 @@ class ManualBehaviourTags(dj.Imported):
                     rkey['frame'] = row.frame
                     rkey['session_frame'] = row.session_frame
                     rkey['stim_frame'] = row.stim_frame
+                    rkey['session_stim_frame'] = row.session_stim_frame
                     rkey['rec_n'] = row.rec_number
 
                     manual_insert_skip_duplicate(self.Tags, rkey)
