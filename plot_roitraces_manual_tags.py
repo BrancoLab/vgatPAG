@@ -6,9 +6,11 @@ from scipy.signal import medfilt
 from pathlib import Path
 from palettable.cmocean.sequential import Matter_8 as CMAP
 from palettable.cmocean.sequential import Speed_8 as CMAP2
+from palettable.cmocean.sequential import Deep_8 as CMAP3
 from matplotlib.lines import Line2D
 
 from fcutils.plotting.utils import calc_nrows_ncols, set_figure_subplots_aspect, clean_axes, save_figure
+from fcutils.plotting.plot_elements import plot_mean_and_error
 
 from Analysis  import (
         mice,
@@ -46,15 +48,14 @@ def make_signal_ax(ax, ttl, start, end):
     ax.set(title=ttl, xticks=[0, n_frames_pre, t], 
                     xlim = [0, t],
                     xticklabels=[-n_sec_pre, 0, n_sec_post],
-                    xlabel='time (s)', ylabel='signal')
+                    xlabel='time (s)', ylabel=f'signal {"baselined" if NORMALIZE else ""}')
 
 def process_sig(sig, start, end, n_sec_post, norm=False, filter=True):
     if filter: # median filter
         sig = medfilt(sig, kernel_size=5)
     if norm: # normalize with baseline
-        raise NotImplementedError('need to think about wht the best way to norm this stuff is')
-        # baseline = np.mean(sig[start: start + n_frames_pre - 1])
-        # return sig / baseline
+        baseline = np.mean(sig[start: start + n_frames_pre - 1])
+        sig =  sig - baseline
     return sig
 
 def get_next_tag(frame, tags, max_delay = 1000):
@@ -80,6 +81,22 @@ def outline(ax, x, y, color, **kwargs):
     ax.plot(x, y, color=[.4, .4, .4], lw=6, zorder=-1, ls=ls)
     ax.plot(x, y, color=color, lw=4, ls=ls, **kwargs)
 
+
+def get_colors(tags):
+    colors = []
+    for n, (i, tag) in enumerate(tags.iterrows()):
+        
+        if 'Loom' in tag.event_type:
+            cmap = CMAP
+        elif 'US' in tag.event_type:
+            cmap = CMAP2
+        elif 'None' in tag.event_type:
+            cmap = CMAP3
+        else:
+            raise NotImplementedError
+        colors.append(colorMap(n, name=cmap.mpl_colormap, vmin=-1, vmax=len(tags)+1))
+
+    return colors
 
 def plot_tracking_trace(ax, tracking, color, label, start, end, mark_frame = None, stim_frame=None, escape_start_frame=None):
     # plot tracking
@@ -127,25 +144,66 @@ def plot_speed_trace(ax, speed, xpos, color, label, start, end, mark_frame = Non
                     color=color, lw=2, edgecolors='k', zorder=99)
 
 def plot_signal_trace(ax, sig, color, start, end, mark_frame=None, stim_frame=None, escape_start_frame=None):
+    if not HIGHLIGHT_MEAN:
+        lw = 2.5
+    else:
+        lw = .5
     t = end-start
     # plot tracking
     ax.plot(sig[start:end], label=str(tag.stim_frame),
-        color=[.4, .4, .4], lw=6, zorder=-1)
+        color=[.4, .4, .4], lw=lw+1, zorder=-1, alpha=.7)
     ax.plot(sig[start:end], label=str(tag.stim_frame),
-        color=color, lw=4)
+        color=color, lw=lw, alpha=.7)
 
-    if mark_frame is not None:
-        ax.scatter(mark_frame-start, sig[mark_frame], s=150,
-                color='white', lw=2, edgecolors=color, zorder=99)
+    if not HIGHLIGHT_MEAN:
+        if mark_frame is not None:
+            ax.scatter(mark_frame-start, sig[mark_frame], s=150,
+                    color='white', lw=2, edgecolors=color, zorder=99)
 
-    if stim_frame is not None:
-        if stim_frame-start>0: # don't show it it's too in the past
-            ax.scatter(stim_frame-start, sig[stim_frame], s=150,
+        if stim_frame is not None:
+            if stim_frame-start>0: # don't show it it's too in the past
+                ax.scatter(stim_frame-start, sig[stim_frame], s=150,
+                        color='k', lw=2, edgecolors=color, zorder=99)
+
+        if escape_start_frame is not None:
+                ax.scatter(escape_start_frame-start, sig[escape_start_frame], s=150, marker='D',
+                        color=color, lw=2, edgecolors='k', zorder=99)
+
+def plot_means(axarr, means, event_means):
+    x = np.mean(means.pop('x'), 0)
+    y = np.mean(means.pop('y'), 0)
+    s = np.mean(means.pop('s'), 0)
+
+    sigs_std = [np.std(v, 0) for v in means.values()]
+    sigs = [np.mean(v, 0) for v in means.values()]
+
+    try:
+        arrive = int(np.mean(event_means['arrive']))
+    except:
+        arrive = None
+
+    stim = int(np.mean(event_means['stim']))
+
+    try:
+        turn = int(np.mean(event_means['turn']))
+    except:
+        turn = None
+
+    for n, sig in enumerate(sigs):
+        axarr[n+2].plot(sig, lw=8, color='k')
+        plot_mean_and_error(sig, sigs_std[n], axarr[n+2], color='r', lw=6)
+
+        if arrive is not None:
+            axarr[n+2].scatter(arrive, sig[arrive], s=250,
+                    color='white', lw=2, edgecolors='k', zorder=99)
+
+        if stim >= 0:        
+            axarr[n+2].scatter(stim, sig[stim], s=250,
                     color='k', lw=2, edgecolors=color, zorder=99)
 
-    if escape_start_frame is not None:
-            ax.scatter(escape_start_frame-start, sig[escape_start_frame], s=150, marker='D',
-                    color=color, lw=2, edgecolors='k', zorder=99)
+        if turn is not None:
+            axarr[n+2].scatter(turn, sig[turn], s=250, marker='D',
+                    color='white', lw=2, edgecolors='k', zorder=99)
 
 # %%
 
@@ -168,10 +226,12 @@ n_frames_pre = n_sec_pre * fps
 n_frames_post = n_sec_post * fps
 
 tag_type = 'VideoTag_B'
-event_type = ['Loom_Escape', 'US_Escape', 'LoomUS_Escape']
+# event_type =  ['Loom_Escape', 'US_Escape', 'LoomUS_Escape'] #  
+event_type = ['None_Escape'] #
 
-NORMALIZE = False # if true divide sig by the mean of the sig in n_sec_pre
+NORMALIZE = True # if true divide sig by the mean of the sig in n_sec_pre
 FILTER = True # if true data are median filtered to remove artefact
+HIGHLIGHT_MEAN = True # if true plots are made to highlight the mean across trials instead of individual trials
 
 event_types = list(manual_tags.event_type.unique())
 
@@ -197,21 +257,16 @@ for mouse, sess, sessname in mouse_sessions:
     # Prep figure
     rows, cols = calc_nrows_ncols(len(signals) + 2, (30, 15))
     f, axarr = plt.subplots(ncols=cols, nrows=rows, figsize = (30, 15))
-    f.suptitle(f'{sessname} traces aligned to {tag_type}')
+    f.suptitle(f'{sessname} traces aligned to {tag_type} | {"".join(event_type)} | baselined: {NORMALIZE}')
     axarr = axarr.flatten()
 
     # make colors
-    colors = []
-    for n, (i, tag) in enumerate(tags.iterrows()):
-        if 'Loom' in tag.event_type:
-            cmap = CMAP
-        elif 'US' in tag.event_type:
-            cmap = CMAP2
-        else:
-            raise NotImplementedError
-        colors.append(colorMap(n, name=cmap.mpl_colormap, vmin=-1, vmax=len(tags)+1))
+    colors = get_colors(tags)
 
     # Plot data
+    means = {s:[] for s, _ in enumerate(signals)}
+    means['x'], means['y'], means['s'] = [], [], []
+    event_means = dict(stim=[], turn=[], arrive=[])
     for count, (color, (i, tag)) in enumerate(zip(colors, tags.iterrows())):
         start = tag.session_frame - n_frames_pre
         end = tag.session_frame + n_frames_post
@@ -222,8 +277,12 @@ for mouse, sess, sessname in mouse_sessions:
         nxt_at_shelt = get_next_tag(tag.session_frame, at_shelt_tags)
         escape_start = get_last_tag(tag.session_frame, escape_start_tags)
         failed = get_next_tag(tag.session_frame, failures_tags)
-        if failed:
-            print('Failure alarm!!')
+        
+        event_means['stim'].append(tag.session_stim_frame -  start)
+        if escape_start is not None:
+            event_means['turn'].append(escape_start -  start)   
+        if nxt_at_shelt is not None:
+            event_means['arrive'].append(nxt_at_shelt -  start)
 
         if start > len(tracking):
             print(f'!! tag frame {start} is out of bounds: # frames: {len(tracking)}')
@@ -243,18 +302,27 @@ for mouse, sess, sessname in mouse_sessions:
                                  stim_frame=tag.session_stim_frame,
                                  escape_start_frame = escape_start,
                                  )
+
+        # STORE SIGNS FOR MEANS
+        means['x'].append(tracking.x[start:end])
+        means['y'].append(tracking.y[start:end])
+        means['s'].append(speed[start:end])
+
         # PLOT SIGNALS
         for roin, sig in enumerate(signals):
             if np.std(sig[start:end]) == 0:
                 raise ValueError
-
+            sig = process_sig(sig, start, end, n_sec_pre, norm=NORMALIZE, filter=FILTER)
             plot_signal_trace(axarr[roin+2], 
-                                process_sig(sig, start, end, n_sec_pre, norm=NORMALIZE, filter=FILTER), 
-                                color, start, end,
+                                sig,
+                                color if not HIGHLIGHT_MEAN else [.1, .1, .1], 
+                                start, end,
                                 mark_frame=nxt_at_shelt,
                                 stim_frame = tag.session_stim_frame,
                                 escape_start_frame = escape_start,
                                 )
+            means[roin].append(sig[start:end])
+
 
         # MAKE CUSTOM LEGEND
         if count == 0:
@@ -264,10 +332,12 @@ for mouse, sess, sessname in mouse_sessions:
                 Line2D([0], [0], color=color, lw=4, marker='^', label='Shelter', markersize=10, markeredgecolor='k'),
                 Line2D([0], [0], color=color, lw=4, label=str(tag.stim_frame)),
             ]
-        else:
-            legend_elements.append(Line2D([0], [0], color=color, lw=4, label=str(tag.stim_frame)),)
 
-    # fig figure
+    # PLOT MEAN TRACES
+    if HIGHLIGHT_MEAN:
+        plot_means(axarr, means, event_means)
+
+    # fix figure
     for n, ax in enumerate(axarr[2:]):
         if n >= len(signals):
             ax.axis('off')
@@ -280,7 +350,7 @@ for mouse, sess, sessname in mouse_sessions:
 
     clean_axes(f)
     set_figure_subplots_aspect(right=.85, top=.9, wspace=.4)
-    save_figure(f, str(fld / f'{sessname}_tag_{tag_type[-1]}'), svg=False)
+    save_figure(f, str(fld / f'{sessname}_tag_{tag_type[-1]}_{"".join(event_type)}_mean_{HIGHLIGHT_MEAN}'), svg=False)
 
     # break
 
@@ -295,8 +365,15 @@ with open(str(fld / '00_info.txt'), 'w') as out:
                         event_type = {event_type}
                         NORMALIZE = {NORMALIZE}
                         FILTER = {FILTER}
+
+
+                    RED = LOOM/LOOM+ULTRASOUND
+                    GREEN = ULTRASOUND
+                    BLUE = SPONTANEOUS
 ''')
 
 
+
+# %%
 
 # %%
