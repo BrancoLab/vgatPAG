@@ -169,13 +169,16 @@ def plot_signal_trace(ax, sig, color, start, end, mark_frame=None, stim_frame=No
                 ax.scatter(escape_start_frame-start, sig[escape_start_frame], s=150, marker='D',
                         color=color, lw=2, edgecolors='k', zorder=99)
 
-def plot_means(axarr, means, event_means):
-    x = np.mean(means.pop('x'), 0)
-    y = np.mean(means.pop('y'), 0)
-    s = np.mean(means.pop('s'), 0)
-
+def plot_means(axarr, means, event_means, color='r', mark=True):
+    try:
+        x = np.mean(means.pop('x'), 0)
+        y = np.mean(means.pop('y'), 0)
+        s = np.mean(means.pop('s'), 0)
+    except:
+        pass
+        
     sigs_std = [np.std(v, 0) for v in means.values()]
-    sigs = [np.mean(v, 0) for v in means.values()]
+    sigs = [np.median(v, 0) for v in means.values()]
 
     try:
         arrive = int(np.mean(event_means['arrive']))
@@ -190,20 +193,24 @@ def plot_means(axarr, means, event_means):
         turn = None
 
     for n, sig in enumerate(sigs):
-        axarr[n+2].plot(sig, lw=8, color='k')
-        plot_mean_and_error(sig, sigs_std[n], axarr[n+2], color='r', lw=6)
+        axarr[n+2].plot(sig, lw=5, color='k')
+        plot_mean_and_error(sig, sigs_std[n], axarr[n+2], color=color, lw=3)
 
-        if arrive is not None:
-            axarr[n+2].scatter(arrive, sig[arrive], s=250,
-                    color='white', lw=2, edgecolors='k', zorder=99)
+        if mark:
+            if arrive is not None:
+                axarr[n+2].scatter(arrive, sig[arrive], s=250,
+                        alpha=.4, 
+                        color='white', lw=2, edgecolors='k', zorder=99)
 
-        if stim >= 0:        
-            axarr[n+2].scatter(stim, sig[stim], s=250,
-                    color='k', lw=2, edgecolors=color, zorder=99)
+            if stim >= 0:        
+                axarr[n+2].scatter(stim, sig[stim], s=250,
+                        alpha=.4, 
+                        color='k', lw=2, edgecolors=color, zorder=99)
 
-        if turn is not None:
-            axarr[n+2].scatter(turn, sig[turn], s=250, marker='D',
-                    color='white', lw=2, edgecolors='k', zorder=99)
+            if turn is not None:
+                axarr[n+2].scatter(turn, sig[turn], s=250, marker='D',
+                        alpha=.4, 
+                        color='white', lw=2, edgecolors='k', zorder=99)
 
 # %%
 
@@ -220,14 +227,14 @@ include_sessions = [  # including only sessions with lots of data
 
 # Params
 fps = 30
-n_sec_pre = 2
-n_sec_post = 3
+n_sec_pre = 4
+n_sec_post = 4
 n_frames_pre = n_sec_pre * fps
 n_frames_post = n_sec_post * fps
 
 tag_type = 'VideoTag_B'
-# event_type =  ['Loom_Escape', 'US_Escape', 'LoomUS_Escape'] #  
-event_type = ['None_Escape'] #
+event_type =  ['Loom_Escape', 'US_Escape', 'LoomUS_Escape'] #  
+event_type2 = ['None_Escape'] #
 
 NORMALIZE = True # if true divide sig by the mean of the sig in n_sec_pre
 FILTER = True # if true data are median filtered to remove artefact
@@ -243,6 +250,8 @@ for mouse, sess, sessname in mouse_sessions:
     # Get data
     tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
     tags = get_tags_by(mouse=mouse, sess_name=sess, event_type=event_type, tag_type=tag_type)
+    tags2 = get_tags_by(mouse=mouse, sess_name=sess, event_type=event_type2, tag_type=tag_type)
+
     # print(get_tags_by(mouse=mouse, sess_name=sess, tag_type=tag_type).event_type.unique())
     # continue
 
@@ -267,6 +276,7 @@ for mouse, sess, sessname in mouse_sessions:
     means = {s:[] for s, _ in enumerate(signals)}
     means['x'], means['y'], means['s'] = [], [], []
     event_means = dict(stim=[], turn=[], arrive=[])
+
     for count, (color, (i, tag)) in enumerate(zip(colors, tags.iterrows())):
         start = tag.session_frame - n_frames_pre
         end = tag.session_frame + n_frames_post
@@ -324,6 +334,60 @@ for mouse, sess, sessname in mouse_sessions:
             means[roin].append(sig[start:end])
 
 
+    means2 = {s:[] for s, _ in enumerate(signals)}
+    for count, (color, (i, tag)) in enumerate(zip(colors, tags2.iterrows())):
+        start = tag.session_frame - n_frames_pre
+        end = tag.session_frame + n_frames_post
+
+        if np.sum(is_rec[start:end]) == 0: # recording was off
+            continue
+
+        nxt_at_shelt = get_next_tag(tag.session_frame, at_shelt_tags)
+        escape_start = get_last_tag(tag.session_frame, escape_start_tags)
+        failed = get_next_tag(tag.session_frame, failures_tags)
+        
+        event_means['stim'].append(tag.session_stim_frame -  start)
+        if escape_start is not None:
+            event_means['turn'].append(escape_start -  start)   
+        if nxt_at_shelt is not None:
+            event_means['arrive'].append(nxt_at_shelt -  start)
+
+        if start > len(tracking):
+            print(f'!! tag frame {start} is out of bounds: # frames: {len(tracking)}')
+            raise ValueError
+
+        # PLOT TRACKING
+        plot_tracking_trace(axarr[0], tracking, color, f'frame {start}', start, end,
+                                 mark_frame=nxt_at_shelt, 
+                                 stim_frame=tag.session_stim_frame,
+                                 escape_start_frame = escape_start,
+                                 )
+        
+        # PLOT SPEED and S distance
+        plot_speed_trace(axarr[1], pxperframe_to_cmpersec(speed), tracking.x, 
+                                color, f'frame {start}', start, end,
+                                 mark_frame=nxt_at_shelt, 
+                                 stim_frame=tag.session_stim_frame,
+                                 escape_start_frame = escape_start,
+                                 )
+
+
+        # PLOT SIGNALS
+        for roin, sig in enumerate(signals):
+            if np.std(sig[start:end]) == 0:
+                raise ValueError
+            sig = process_sig(sig, start, end, n_sec_pre, norm=NORMALIZE, filter=FILTER)
+            plot_signal_trace(axarr[roin+2], 
+                                sig,
+                                color if not HIGHLIGHT_MEAN else [.1, .1, .1], 
+                                start, end,
+                                mark_frame=nxt_at_shelt,
+                                stim_frame = tag.session_stim_frame,
+                                escape_start_frame = escape_start,
+                                )
+            means2[roin].append(sig[start:end])
+
+
         # MAKE CUSTOM LEGEND
         if count == 0:
             legend_elements = [
@@ -336,6 +400,9 @@ for mouse, sess, sessname in mouse_sessions:
     # PLOT MEAN TRACES
     if HIGHLIGHT_MEAN:
         plot_means(axarr, means, event_means)
+        try:
+            plot_means(axarr, means2, event_means, color='b', mark=False)
+        except : pass
 
     # fix figure
     for n, ax in enumerate(axarr[2:]):
@@ -375,5 +442,78 @@ with open(str(fld / '00_info.txt'), 'w') as out:
 
 
 # %%
+"""
+    Look at the correlation across signals for each ROI before and after the event onset
+"""
+
+def get_corr_mtx(signals):
+    mtx = np.zeros((len(signals), len(signals)))
+
+    for i, a in enumerate(signals):
+        for j,b in enumerate(signals):
+            if i == j:
+                mtx[i, j] = np.nan
+                mtx[j, i] = np.nan
+            else:
+                coeff = pearsonr(a, b)[0]
+                mtx[i, j] = coeff
+                mtx[j, i] = coeff
+
+    return mtx
+
+for mouse, sess, sessname in mouse_sessions:
+    # if sessname not in include_sessions: continue
+    print(f'Processing {sessname}\n')
+
+    # Get data
+    tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
+    tags = get_tags_by(mouse=mouse, sess_name=sess, event_type=event_type, tag_type=tag_type)
+
+
+    clean_sigs = {n:dict(pre=[], post=[]) for n, s in enumerate(signals)}
+    for count, (color, (i, tag)) in enumerate(zip(colors, tags.iterrows())):
+        start = tag.session_frame - n_frames_pre
+        end = tag.session_frame + n_frames_post
+
+        for roin, sig in enumerate(signals):
+                if np.std(sig[start:end]) == 0:
+                    raise ValueError
+                sig = process_sig(sig, start, end, n_sec_pre, norm=NORMALIZE, filter=FILTER)
+                clean_sigs[roin]['pre'].append(sig[start:start+n_frames_pre-1])
+                clean_sigs[roin]['post'].append(sig[start+n_frames_pre+1:end])
+
+    # make figure
+    rows, cols = calc_nrows_ncols(len(signals)*2, (30, 15))
+    f, axarr = plt.subplots(ncols=cols, nrows=rows, figsize = (30, 15))
+    axarr = axarr.flatten()
+
+    axn = 0
+    for roin in range(nrois):
+        corr_mtx_pre = get_corr_mtx(clean_sigs[roin]['pre'])
+        axarr[axn].imshow(corr_mtx_pre,  cmap='bwr', vmin=-1, vmax=1)
+        axn += 1
+
+
+        corr_mtx_post = get_corr_mtx(clean_sigs[roin]['post'])
+        axarr[axn].imshow(corr_mtx_post,  cmap='bwr', vmin=-1, vmax=1)
+        axn += 1
+
+    break
+
+
+
+# %%
+from scipy.stats.stats import pearsonr   
+mtx = np.zeros((len(tags), len(tags)))
+
+for i, a in enumerate(clean_sigs[0]['pre']):
+    for j,b in enumerate(clean_sigs[0]['pre']):
+        if i == j:
+            mtx[i, j] = np.nan
+        coeff = pearsonr(a, b)[0]
+        mtx[i, j] = coeff
+        mtx[j, i] = coeff
+
+plt.imshow(mtx, cmap='bwr', vmin=-1, vmax=1)
 
 # %%
