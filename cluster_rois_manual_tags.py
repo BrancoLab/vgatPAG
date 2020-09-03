@@ -12,10 +12,10 @@ from palettable.cmocean.sequential import Deep_8 as CMAP3
 from matplotlib.lines import Line2D
 from tqdm import tqdm
 from scipy.stats.stats import pearsonr   
-
+from numba import jit
 import scipy
 import scipy.cluster.hierarchy as sch
-from sklearn.preprocessing import normalize
+from sklearn.cluster import AgglomerativeClustering
 
 
 from fcutils.plotting.utils import calc_nrows_ncols, set_figure_subplots_aspect, clean_axes, save_figure
@@ -36,155 +36,41 @@ from Analysis  import (
 from Analysis.tag_aligned import (
     manual_tags,
     get_tags_by,
+    get_next_tag,
+    get_last_tag,
 )
 
 
+
 # %%
 
 # ---------------------------------------------------------------------------- #
-#                                 CACHE SIGNALS                                #
+#                              CLUSTER CORR MATRIX                             #
 # ---------------------------------------------------------------------------- #
 
-""" 
-    Store each ROIs' signal for each trial in a dataframe
-"""
 
-fld = Path('D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\Fede\\plots\\ManualTagsAligned')
+SMOOTH_REG = 0.0   # Strength of roughness penalty
+WARP_REG = 0.0      # Strength of penalty on warp magnitude
+L2_REG = 0.0        # Strength of L2 penalty on template magnitude
+MAXLAG = .1        # Maximum amount of shift allowed.
 
-CACHE_SIGNALS = False
-
-def process_sig(sig, start, end, n_sec_post, norm=False, filter=True):
-    if filter: # median filter
-        sig = medfilt(sig, kernel_size=5)
-    if norm: # normalize with baseline
-        baseline = np.mean(sig[start: start + n_frames_pre - 1])
-        sig =  sig - baseline
-    return sig
+shift_model = ShiftWarping(
+    maxlag=MAXLAG,
+    smoothness_reg_scale=SMOOTH_REG,
+    warp_reg_scale=WARP_REG,
+    l2_reg_scale=L2_REG, 
+)
 
 
-fps = 30
-n_sec_pre = 4
-n_sec_post = 4
-n_frames_pre = n_sec_pre * fps
-n_frames_post = n_sec_post * fps
+# dend = sch.dendrogram(sch.linkage(corr, method='ward'))
 
-
-if CACHE_SIGNALS:
-        
-    cache = dict(
-        mouse = [],
-        session = [],
-        session_frame = [],
-        tag_type = [],
-        n_frames_pre = [],
-        n_frames_post = [],
-        roi_n = [],
-        signal = [],
-    )
-
-
-    tag_type = 'VideoTag_B'
-    event_type =  ['Loom_Escape', 'US_Escape', 'LoomUS_Escape'] #  
-
-    NORMALIZE = True # if true divide sig by the mean of the sig in n_sec_pre
-    FILTER = True # if true data are median filtered to remove artefact
-
-    
-    for mouse, sess, sessname in mouse_sessions:
-        # if sessname not in include_sessions: continue
-        print(f'Processing {sessname}\n')
-
-        # Get data
-        tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
-        tags = get_tags_by(mouse=mouse, sess_name=sess, event_type=event_type, tag_type=tag_type)
-        for count, (i, tag) in enumerate(tags.iterrows()):
-            start = tag.session_frame - n_frames_pre
-            end = tag.session_frame + n_frames_post
-
-            if np.sum(is_rec[start:end]) == 0: # recording was off
-                continue
-
-            # CACHE
-            for roin, sig in enumerate(signals):
-                if np.std(sig[start:end]) == 0:
-                    raise ValueError
-                sig = process_sig(sig, start, end, n_sec_pre, norm=NORMALIZE, filter=FILTER)
-
-                cache['mouse'].append(mouse)
-                cache['session'].append(sess)
-                cache['session_frame'].append(tag.session_frame)
-                cache['tag_type'].append(tag_type)
-                cache['n_frames_pre'].append(n_frames_pre)
-                cache['n_frames_post'].append(n_frames_post)
-                cache['roi_n'].append(roin)
-                cache['signal'].append(sig[start:end])
-
-    cache = pd.DataFrame(cache)
-    cache.to_hdf(os.path.join(fld, 'cached_traces.h5'), key='hdf')
-else:
-    cache = pd.read_hdf(os.path.join(fld, 'cached_traces.h5'), key='hdf')
-cache.head()
-
-# %%
-
-# ----------------------- Compute cross correlation mtx ---------------------- #
-
-COMPUTE = False
-if COMPUTE:
-
-    n_sigs = len(cache)
-
-    corr = np.zeros((n_sigs, n_sigs))
-
-    done = []
-    for i in tqdm(range(n_sigs)):
-        for j in range(n_sigs):
-            if (i, j) in done or (j, i) in done: 
-                continue
-            else:
-                done.append((i, j))
-
-            if i == j:
-                corr[i, j] = 1.
-            else:
-                _corr = pearsonr(cache.iloc[i]['signal'], cache.iloc[j]['signal'])[0]
-                corr[i, j] = _corr
-                corr[j, i] = _corr
-    np.save(os.path.join(fld, 'cached_corr_mtx.npy'), corr)
-else:
-    corr = np.load(os.path.join(fld, 'cached_corr_mtx.npy'))
-
-    
-plt.imshow(corr)
-
-
-
-# %%
-
-
-d = sch.distance.pdist(corr)   # vector of ('55' choose 2) pairwise distances
-L = sch.linkage(d, method='complete')
-ind = sch.fcluster(L, 0.5*d.max(), 'distance')
-# columns = [df.columns.tolist()[i] for i in list((np.argsort(ind)))]
-# df = df.reindex_axis(columns, axis=1)
-
-corr_clust = corr.copy()
-corr_clust[:] = corr_clust[:, np.argsort(ind)]
-corr_clust[:] = corr_clust[np.argsort(ind), :]
-
-fig, ax = plt.subplots(figsize=(12, 12))
-cax = ax.matshow(corr_clust, cmap='RdYlGn')
-
-
-# %%
-dend = sch.dendrogram(sch.linkage(corr, method='ward'))
-# %%
-from sklearn.cluster import AgglomerativeClustering
+# cluster
 N_CLUSTERS = 5
 cluster = AgglomerativeClustering(n_clusters=N_CLUSTERS, affinity='euclidean', linkage='ward')
 _ = cluster.fit_predict(corr)
 
-# %%
+
+# plot traces
 f, axarr = plt.subplots(ncols=3, nrows=2, figsize=(16, 12), sharex=True, sharey=True)
 axarr = axarr.flatten()
 
@@ -199,15 +85,23 @@ for ax, clust_id in zip(axarr, set(cluster.labels_)):
         sigs.append(t.signal - np.mean(t.signal[:n_frames_pre-1]))
     signals = np.vstack(sigs)
 
+    # affine warp all signals
+    # warp_signs = signals[np.newaxis, :, :].transpose((1, 2, 0))
+    # shift_model.fit(warp_signs)
+    # warped = shift_model.transform(warp_signs).squeeze(2)
+
     ax.plot(signals.T, color='k', lw=1, alpha=.5)
 
     mean, std = np.mean(signals, 0), np.std(signals, 0)
-    # plot_mean_and_error(mean, std, ax, zorder=99, color='r')
+    plot_mean_and_error(mean, std, ax, zorder=99, color='r')
 
     ax.axvline(n_frames_pre, lw=2, color='g')
     ax.set(title=f'Cluster {clust_id} - {len(clust_sigs)} trials', ylim=[-150, 150])
 
+    
 
+
+# Plot correlation matrix (sorted)
 srtd = np.sort(cluster.labels_)
 changes = [np.where(srtd == n)[0][0] for n in range(N_CLUSTERS)]
 
@@ -217,12 +111,67 @@ corr_clust[:] = corr_clust[np.argsort(cluster.labels_), :]
 axarr[-1].axis('off')
 clean_axes(f)
 
-# fig, ax = plt.subplots(figsize=(12, 12))
-# cax = ax.matshow(corr_clust, cmap='RdYlGn', )
-# fig.colorbar(cax, ax=ax, shrink=0.9)
+fig, ax = plt.subplots(figsize=(12, 12))
+cax = ax.matshow(corr_clust, cmap='RdYlGn', )
+fig.colorbar(cax, ax=ax, shrink=0.9)
 
-# for change in changes:
-#     ax.axvline(change, lw=2, color='m')
-#     ax.axhline(change, lw=2, color='m')
+for change in changes:
+    ax.axvline(change, lw=2, color='m')
+    ax.axhline(change, lw=2, color='m')
 
+# %%
+# Plot individual trials for sanity check
+f, axarr = plt.subplots(ncols=2, figsize=(12, 8))
+
+for (idx1, idx2) in zip(*np.where((corr > .9)&(corr<1))):
+    t1, t2 = cache.iloc[idx1], cache.iloc[idx2]
+    if idx1 < 500: continue
+
+    if t1.mouse != t2.mouse:
+
+        axarr[0].plot(t1.x, t1.y)
+        axarr[0].plot(t2.x, t2.y)
+        axarr[0].set(title='XY tracking')
+
+        axarr[1].plot(t1.signal)
+        axarr[1].plot(t2.signal)
+        axarr[1].set(title=f'Correlation: {round(corr[idx1, idx2], 2)}')
+
+        break
+
+# %%
+traces = cache.loc[(cache.mouse == 'BF161p1')&(cache.session == '19JUN03')]
+
+all_sigs = []
+for roin in traces.roi_n.unique():
+    roi_traces = traces.loc[traces.roi_n == roin]
+    roi_sigs = np.vstack([t.signal for i,t in roi_traces.iterrows()])
+    all_sigs.append(roi_sigs)
+
+all_sigs = np.array(all_sigs).transpose((1, 2, 0))
+all_sigs.shape # n trials - n samples - n rois
+    
+# %%
+
+
+# Fit to binned spike times.
+shift_model.fit(all_sigs, iterations=50)
+
+shift_aligned_data = shift_model.transform(all_sigs)
+
+
+f, axarr = plt.subplots(ncols=4, nrows=4, figsize=(24, 18))
+axarr = axarr.flatten()
+
+for n, ax in enumerate(axarr):
+    # pot not-warped traces
+    ax.plot(all_sigs[:, :, n].T, color='k', alpha=.3 ) 
+    # plot_mean_and_error(np.mean(all_sigs[:, :, n], 0), np.std(all_sigs[:, :, n], 0), ax, color='k')
+
+    # pot warped traces
+    ax.plot(shift_aligned_data[:, :, n].T, color='r', alpha=.3)
+    # plot_mean_and_error(np.mean(shift_aligned_data[:, :, n], 0), np.std(shift_aligned_data[:, :, n], 0), ax, color='r')
+# 
+    ax.axvline(n_frames_pre, lw=2, color='g')
+    # break
 # %%

@@ -27,6 +27,8 @@ from Analysis  import (
 from Analysis.tag_aligned import (
     manual_tags,
     get_tags_by,
+    get_next_tag,
+    get_last_tag,
 )
 
 # %%
@@ -58,22 +60,6 @@ def process_sig(sig, start, end, n_sec_post, norm=False, filter=True):
         sig =  sig - baseline
     return sig
 
-def get_next_tag(frame, tags, max_delay = 1000):
-    """
-        Selects the first tag to happend after a given frame
-        as long as not too long a delay happend
-    """
-    nxt = tags.loc[(tags.session_frame - frame > 0)&(tags.session_frame - frame < max_delay)]
-    if not len(nxt): return None
-    else: 
-        return nxt.session_frame.values[0]
-
-def get_last_tag(frame, tags, max_delay=500):
-    nxt = tags.loc[(tags.session_frame - frame < 0)&(np.abs(tags.session_frame - frame) < max_delay)]
-    if not len(nxt): 
-        return None
-    else: 
-        return nxt.session_frame.values[-1]
 
 # ------------------------------ Plotting utils ------------------------------ #
 def outline(ax, x, y, color, **kwargs):
@@ -256,7 +242,7 @@ for mouse, sess, sessname in mouse_sessions:
     # continue
 
     if not len(tags):
-        print(f'Didnt find any tags of tupe {tag_type} in session {sessname}')
+        print(f'Didnt find any tags of type {tag_type} in session {sessname}')
         continue
 
     at_shelt_tags = get_tags_by(mouse=mouse, sess_name=sess, event_type=event_type, tag_type='VideoTag_E')
