@@ -4,14 +4,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 import numpy as np
-from scipy.signal import medfilt
 from pathlib import Path
 from tqdm import tqdm
-from scipy.stats.stats import pearsonr   
 
 from numba import jit
 from affinewarp import ShiftWarping, PiecewiseWarping
 
+from scipy.stats import zscore
+
+from fcutils.maths.filtering import smooth_hanning
 
 from Analysis  import (
         mice,
@@ -50,10 +51,20 @@ COMPUTE = True # if true it computes a new corr.mtx otherwise it loads one
 
 
 fps = 30
-n_sec_pre = 4
-n_sec_post = 4
+
+n_sec_pre = 4 # rel escape onset
+n_sec_post = 6 # # rel escape onset
 n_frames_pre = n_sec_pre * fps
 n_frames_post = n_sec_post * fps
+
+n_sec_baseline = 15 # n seconds before stimulus to use for DF/F calculation
+
+n_SD_th = 1 # trials are kept is signal is above or beyond this n of SDs from mean
+
+
+DFF = True # if true DF/F signal
+FILTER = False # if true filter signal
+ZSCORE = True
 
 
 # %%
@@ -67,12 +78,14 @@ n_frames_post = n_sec_post * fps
 # TODO add time warping before coorelation
 
 
-def process_sig(sig, start, end, n_sec_post, norm=False, filter=True):
-    if filter: # median filter
-        sig = medfilt(sig, kernel_size=5)
-    if norm: # BASELINE with baseline
-        baseline = np.mean(sig[start: start + n_frames_pre - 1])
-        sig =  sig - baseline
+def process_sig(sig, baseline=None,  dff=False, filt=False, zsc=False):
+    if filt: # median filter
+        sig = smooth_hanning(sig, window_len=21)
+    if dff: # dff
+        sig =  (sig - np.mean(baseline))  / np.mean(baseline)
+
+    if zsc:
+        sig = zscore(sig)
     return sig
 
 
@@ -89,18 +102,19 @@ if CACHE_SIGNALS:
         n_frames_post = [],
         roi_n = [],
         signal = [],
+        baseline = [], 
         x = [], 
         y = [],
         s = [],
         above_noise = [],
+        full_escape = [], 
+        at_shelt_frame = [],
     )
 
 
     tag_type = 'VideoTag_B'
     event_type =  ['Loom_Escape', 'US_Escape', 'LoomUS_Escape'] #  
 
-    BASELINE = True # if true basleine the sginal
-    FILTER = True # if true data are median filtered to remove artefact
 
     
     for mouse, sess, sessname in mouse_sessions:
@@ -116,8 +130,8 @@ if CACHE_SIGNALS:
         # For each signal, get the mean and baseline 
         baselines = []
         for sig in signals:
-            sig = sig[is_rec == 1]
-            baselines.append((np.mean(sig) - 1 * np.std(sig), np.mean(sig) + 1 * np.std(sig)))
+            sig = process_sig(sig[is_rec == 1], dff=False, filt=FILTER, zsc=False)
+            baselines.append((np.mean(sig) - n_SD_th * np.std(sig), np.mean(sig) + n_SD_th * np.std(sig)))
 
 
         for count, (i, tag) in tqdm(enumerate(tags.iterrows())):
@@ -126,26 +140,35 @@ if CACHE_SIGNALS:
 
             nxt_at_shelt = get_next_tag(tag.session_frame, at_shelt_tags)
             if nxt_at_shelt is None: 
-                print('no shelt')
-                continue
+                full_escape = False
+                at_shelt_frame = None
+            else:
+                full_escape = True
+                at_shelt_frame = nxt_at_shelt - start
 
-            if np.sum(is_rec[start:end]) == 0: # recording was off
-                continue
+
 
             # CACHE
             for roin, sig in enumerate(signals):
-                if np.std(sig[start:end]) == 0: # recording was off
-                    raise ValueError
-                
-                sig = process_sig(sig, start, end, n_sec_pre, norm=BASELINE, filter=FILTER)
-                sig = sig[start:end]
+                if np.any(is_rec[tag.session_stim_frame - fps * n_sec_baseline:end] == 0): # recording was off
+                    print('no rec')
+                    continue
 
-                above_noise = np.where((sig < baselines[roin][0]) | (sig > baselines[roin][1]))
+                    
+                above_noise = np.where((sig[start:end] < baselines[roin][0]) | (sig[start:end] > baselines[roin][1]))
                 if not np.any(above_noise) :
                     # 'Signal not out of noise
                     above_noise = False
                 else:
                     above_noise = True
+
+
+                # Get signal and baseline
+                baseline = process_sig(sig[tag.session_stim_frame - fps * n_sec_baseline: tag.session_stim_frame], filt=FILTER, zsc=False)
+                sig = sig[start:end]
+                
+                sig = process_sig(sig,  baseline, dff=DFF, filt=FILTER, zsc=ZSCORE)
+
 
                 cache['mouse'].append(mouse)
                 cache['session'].append(sess)
@@ -155,8 +178,11 @@ if CACHE_SIGNALS:
                 cache['n_frames_post'].append(n_frames_post)
                 cache['roi_n'].append(roin)
                 cache['above_noise'].append(above_noise)
+                cache['full_escape'].append(full_escape)
+                cache['at_shelt_frame'].append(at_shelt_frame)
 
                 cache['signal'].append(sig)
+                cache['baseline'].append(baseline)
 
                 cache['x'].append(tracking.x[start:end].values)
                 cache['y'].append(tracking.y[start:end].values)
@@ -171,53 +197,34 @@ print(f'\n\n\n{len(cache)} traces in the cache')
 cache.head()
 
 # %%
+# Plot some traces
+
+sigs = np.vstack([r.signal for i,r in cache.iterrows()]).T
+
+_  = plt.plot(sigs)
+
+
+# %%
 
 # ---------------------------------------------------------------------------- #
 #                            COMPUTE CROSS CORR MTX                            #
 # ---------------------------------------------------------------------------- #
-
-# @jit(nopython=True)
-def make_corr_mtx(sigs):
-
-    n_sigs = len(sigs)
-
-    corr = np.zeros((n_sigs, n_sigs))
-
-    done = []
-    for i in tqdm(range(n_sigs)):
-        print(i)
-        for j in range(n_sigs):
-            if (i, j) in done or (j, i) in done: 
-                continue
-            else:
-                done.append((i, j))
-
-            if i == j:
-                corr[i, j] = 1.
-            else:
-                _corr = pearsonr(sigs[i, :], sigs[j, :])[0]
-                # _corr = np.corrcoef(sigs[i, :], sigs[j, :])[0, 1]
-                corr[i, j] = _corr
-                corr[j, i] = _corr
-    
-    return corr
-
-
-
-
-
 if COMPUTE:
     cache = cache.loc[cache.above_noise == True]
-    sigs = np.vstack([t.signal for i,t in cache.iterrows()])
+    sigs = [t.signal for i,t in cache.iterrows()]
 
-    corr = make_corr_mtx(sigs)
-    # corr = np.corrcoef(sigs)
+    # corr = make_corr_mtx(sigs)
+    corr = np.corrcoef(sigs)
     
     np.save(os.path.join(fld, 'cached_corr_mtx.npy'), corr)
     print('finished')
 else:
     corr = np.load(os.path.join(fld, 'cached_corr_mtx.npy'))
 
-    
+plt.imshow(corr)
+
+# %%
+
+# %%
 
 # %%
