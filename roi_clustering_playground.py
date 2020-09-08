@@ -117,7 +117,7 @@ def norm_stack(df, usekey=True, norm=True):
     return signals
 
 # FIT THE CLUSTERING ALGORITHM
-N_CLUSTERS = 4
+N_CLUSTERS = 6
 WARP = False
 SHOW_HEATMAPS = False
 

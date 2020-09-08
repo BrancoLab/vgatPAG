@@ -63,7 +63,7 @@ n_SD_th = 1 # trials are kept is signal is above or beyond this n of SDs from me
 
 
 DFF = True # if true DF/F signal
-FILTER = False # if true filter signal
+FILTER = True # if true filter signal
 ZSCORE = True
 
 
