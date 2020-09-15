@@ -10,7 +10,7 @@ from affinewarp import ShiftWarping, PiecewiseWarping
 import scipy.cluster.hierarchy as sch
 from sklearn.cluster import AgglomerativeClustering
 
-from fcutils.plotting.utils import calc_nrows_ncols, set_figure_subplots_aspect, clean_axes, save_figure
+from fcutils.plotting.utils import set_figure_subplots_aspect, clean_axes, save_figure
 from fcutils.plotting.plot_elements import plot_mean_and_error
 from fcutils.maths.utils import normalise_1d
 
@@ -68,7 +68,8 @@ def normalize_time_al_traces(traces):
 # ---------------------------------------------------------------------------- #
 #                                    PARAMS                                    #
 # ---------------------------------------------------------------------------- #
-fld = Path('D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\Fede\\plots\\ManualTagsAligned')
+# fld = Path('D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\Fede\\plots\\ManualTagsAligned')
+fld = Path('/Users/federicoclaudi/Dropbox (UCL - SWC)/Project_vgatPAG/analysis/doric/Fede/plots/ManualTagsAligned')
 
 # load cache
 cache = pd.read_hdf(str(fld /  'cached_traces.h5'), key='hdf')
@@ -284,3 +285,26 @@ _ = ax.hist(n_clust_per_roi)
 # %%
 
 # TODO look at distribution of clusters across ROI for each trial in a single mouse at the time
+# %%
+forv = cache.loc[(cache.mouse == 'BF164p1')&(cache.session=='19JUN05')&(cache.roi_n==16)]
+sigs = [v.signal for i,v in forv.iterrows()]
+
+cm = np.corrcoef(sigs)
+
+f, axarr = plt.subplots(ncols=2, figsize=(16, 9))
+
+show_mtx(cm, ax=axarr[0], f=f)
+
+
+from brainrender.colors import colorMap
+
+colors = dict(zip([0, 1, 2, 3, 4, 5, 6], 'grgmk'))
+
+for n, s in enumerate(sigs):
+    axarr[1].plot(s, color=colors[forv.iloc[n].cluster], 
+        lw=5, alpha=.4, label=f'trial: {n} cluster {forv.iloc[n].cluster}')
+axarr[1].legend()
+
+axarr[1].axvline(120, color='k')
+
+# %%
