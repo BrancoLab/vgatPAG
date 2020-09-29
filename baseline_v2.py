@@ -64,14 +64,80 @@ for mouse, sess, sessname in tqdm(mouse_sessions):
     break
 
 # %%
+" for each ROI plot the histogram of signal + a normal distribution with same mean and std"
 
-from skimage.filters.thresholding import _cross_entropy
+from fcutils.plotting.plot_distributions import plot_distribution
+from fcutils.maths.distributions import get_distribution
+from scipy.stats import entropy, normaltest
+import scipy.stats
+from brainrender.colors import colorMap
 
-ce = []
-ths = np.linspace(-200, 200, 200)
-for ith in ths:
-    ce.append(_cross_entropy(sig, ith))
+alpha = 1e-6
+bins = np.linspace(-50, 150, 100)
 
-plt.plot(ths, ce)
-plt.axvline(th)
+def jensen_shannon_distance(p, q):
+    """
+    method to compute the Jenson-Shannon Distance 
+    between two probability distributions
+
+    see: https://medium.com/@sourcedexter/how-to-find-the-similarity-between-two-probability-distributions-using-python-a7546e90a08d
+    """
+
+    # convert the vectors into numpy arrays in case that they aren't
+    p = np.array(p)
+    q = np.array(q)
+
+    # calculate m
+    m = (p + q) / 2
+
+    # compute Jensen Shannon Divergence
+    divergence = (scipy.stats.entropy(p, m) + scipy.stats.entropy(q, m)) / 2
+
+    # compute the Jensen Shannon Distance
+    distance = np.sqrt(divergence)
+
+    return distance
+
+all_dists = []
+for mouse, sess, sessname in tqdm(mouse_sessions):
+    # get data
+    tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
+
+    # Plot signals 
+    # f, axarr = plt.subplots(nrows=5, ncols=6, figsize=(20, 20), sharex=True, sharey=False)
+    # axarr = axarr.flatten()
+
+    for n, sig in enumerate(signals):
+        # get smoothed signal
+        sig = sig[is_rec == 1]
+        smooth_sig = smooth_hanning(sig, window_len=20)
+
+        # Get KL divergence
+        norm_sig = get_distribution('normal', np.mean(smooth_sig), np.std(smooth_sig), n_samples=len(smooth_sig)*5)
+
+        p = np.histogram(smooth_sig, bins=bins, density=True)[0]
+        q = np.histogram(norm_sig, bins=bins, density=True)[0]
+
+        dist = jensen_shannon_distance(p, q)
+        all_dists.append(dist)
+        color = colorMap(dist, name='bwr', vmin=0, vmax=.6)
+        # axarr[n].set(title=f'ROI {n} | dist: {round(dist, 3)} | ')
+
+
+
+        # # plot
+        # axarr[n].hist(smooth_sig, bins=bins, density=True, histtype='stepfilled', ec=[.4, .4, .4],
+        #                 color=color, alpha=.9, lw=2)
+
+        # plot_distribution(np.mean(smooth_sig), np.std(smooth_sig), dist_type='normal', ax=axarr[n], 
+        #         plot_kwargs=dict(lw=2, color='m', alpha=1))
+
+        
+        # break
+    # break
+
+
+
+# %%
+
 # %%
