@@ -1,7 +1,6 @@
 import napari
 import os
 import numpy as np
-import caiman as cm
 
 from fcutils.file_io.utils import check_file_exists
 

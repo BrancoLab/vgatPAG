@@ -66,6 +66,7 @@ def normalize_time_al_traces(traces):
 # %%
 
 # ---------------------------------------------------------------------------- #
+
 #                                    PARAMS                                    #
 # ---------------------------------------------------------------------------- #
 # fld = Path('D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\Fede\\plots\\ManualTagsAligned')
@@ -118,7 +119,7 @@ def norm_stack(df, usekey=True, norm=True):
     return signals
 
 # FIT THE CLUSTERING ALGORITHM
-N_CLUSTERS = 6
+N_CLUSTERS = 4
 WARP = False
 SHOW_HEATMAPS = False
 
@@ -286,7 +287,7 @@ _ = ax.hist(n_clust_per_roi)
 
 # TODO look at distribution of clusters across ROI for each trial in a single mouse at the time
 # %%
-forv = cache.loc[(cache.mouse == 'BF164p1')&(cache.session=='19JUN05')&(cache.roi_n==16)]
+forv = cache.loc[(cache.mouse == 'BF164p1')&(cache.session=='19JUN05')&(cache.roi_n==7)]
 sigs = [v.signal for i,v in forv.iterrows()]
 
 cm = np.corrcoef(sigs)

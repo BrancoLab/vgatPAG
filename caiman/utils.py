@@ -11,6 +11,22 @@ import logging
 import caiman as cm
 from caiman.source_extraction.cnmf.cnmf import load_CNMF
 
+def get_component_trace_from_video(cnum, masks, n_frames, video):
+    """
+        Masks the video (d1 x d1 x nframes 3D array) with a components spatial mask
+        and averages the resulting array to get the signal's trace
+    """
+    # Create  a mask for the whole video
+    component_mask = masks[:, :, cnum]
+    component_video_mask = np.repeat(component_mask[np.newaxis, :,:, ], n_frames, axis=0)
+    component_video_mask[component_video_mask == 0] = np.nan
+
+    # Mask the video and average to extract the trace
+    masked_video = video * component_video_mask
+    masked_video = masked_video.reshape((masked_video.shape[0], -1)) # reshape to make averaging easier
+    trace = np.nanmean(masked_video, axis=1)
+    return trace
+
 # ---------------------------------- Loaders --------------------------------- #
 def load_fit_cnfm(model_path, n_processes, dview):
     return load_CNMF(model_path, n_processes=n_processes, dview=dview)   
