@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from tqdm import tqdm
 
+import pyinspect
+pyinspect.install_traceback()
+
 from fcutils.plotting.utils import save_figure
 
 from movie_visualizer import compare_videos
@@ -41,8 +44,9 @@ for n,f in files.items():
 # compare_videos(raw=str(files['raw']), bgsub=str(files['bgsub']), notebook=False, contrast_limits=None)
 
 # Get bg video data and params
-n_frames = cnm.estimates.C.shape[1]
-video = load_tiff_video_caiman(str(files['bgsub']))
+c, dview, n_processes = start_server()
+cnm = load_CNMF(files['cnm'], n_processes=1, dview=dview)
+
 
 
 # %%
@@ -50,9 +54,10 @@ video = load_tiff_video_caiman(str(files['bgsub']))
 # ---------------------------------------------------------------------------- #
 #                               Load caiman model                              #
 # ---------------------------------------------------------------------------- #
+n_frames = cnm.estimates.C.shape[1]
+video = load_tiff_video_caiman(str(files['bgsub']))
 
-c, dview, n_processes = start_server()
-cnm = load_CNMF(files['cnm'], n_processes=1, dview=dview)
+
 
 
 # Get spatial components from model
