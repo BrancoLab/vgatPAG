@@ -22,10 +22,10 @@ print('ready')
 
 # fld = Path('/Users/federicoclaudi/Dropbox (UCL - SWC)/Project_vgatPAG/analysis/doric/BF161p1_dPAG/19JUN03')
 
-fld = Path(r'D:\Dropbox (UCL - SWC)\Project_vgatPAG\analysis\doric\BF166p3_dPAG\19JUN19')
+fld = Path(r'D:\Dropbox (UCL - SWC)\Project_vgatPAG\analysis\doric\BF136p3_dPAG_ECIC\19MAR11')
 
-vid_name = '19JUN19_BF166p3_ds126_crop3_raw_mc_rig.tif'
-bgsub_vid_name = '19JUN19_BF166p3_ds126_crop3_raw_mc_rig_bgsub.tif'
+vid_name = '19MAR11_BF136p3_t1_ds126_raw_crop_mc_rig.tif'
+bgsub_vid_name = '19MAR11_BF136p3_t1_ds126_raw_crop_mc_rig_bgsub.tif'
 
 files = dict(
             raw=fld/vid_name, 
@@ -54,7 +54,7 @@ video = load_tiff_video_caiman(str(files['bgsub']))
 A = np.load(files['A'])
 
 n_components = A.shape[-1]
-good_components = [7, 35, 8, 26, 25, 1, 0, 19, 21, 29, 28, 23, 20, 22, 37, 30, 31, 32, 36, 27, 33]
+good_components = [6, 5, 3, 14, 13, 1, 10, 2, 26, 28, 29, 27, 3]
 print('good components: ', sorted(good_components))
 
 isgood = [True if n in good_components else False
@@ -172,10 +172,12 @@ for compn in track(range(n_components)):
 np.save(str(save_fld/'masks.npy'), masks)
 np.save(str(save_fld/'traces.npy'), traces)
 
+# %%
 pi.ok('Data saved', save_fld.parent.name + '/' +  save_fld.name)
 
 # %%
 
+# %%
 # ---------------------------------------------------------------------------- #
 #                                  Make video                                  #
 # ---------------------------------------------------------------------------- #
