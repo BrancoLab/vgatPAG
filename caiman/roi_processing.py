@@ -125,49 +125,25 @@ for compn in track(range(n_components)):
 
 
 # %%
-
-# ---------------------------------------------------------------------------- #
-#                                 PLOT RESULTS                                 #
-# ---------------------------------------------------------------------------- #
-
-f, axarr = plt.subplots(ncols=2, nrows=n_components, figsize=(8, 2*n_components),
-                gridspec_kw={'width_ratios': [1, 3]})
-
-for compn in track(range(n_components)):
-    color = [.4, .8, .4] if isgood[compn] else [.8, .4, .4]
-
-
-    axarr[compn, 0].imshow(1 - masks[:, :, compn], cmap='gray_r')
-    axarr[compn, 1].plot(traces[:, compn], lw=2, color=color)
-
-    axarr[compn, 0].set(xticks=[], yticks=[])
-
-    title = f'vidfile {vid_name}' if compn == 0 else f'ROI {compn}'
-    axarr[compn, 1].set(title=title)
-
-# %%
 # Save good traces
 save_fld = fld / 'fiji_traces'
 save_fld.mkdir(exist_ok=True)
 
-count = 0
 for compn in track(range(n_components)):
     if not isgood[compn]: continue
 
     # save the mask
     f, ax = plt.subplots(figsize=(10, 10))
     ax.imshow(1 - masks[:, :, compn], cmap='gray_r')
-    ax.set(title=f'ROI {count}', xticks=[], yticks=[])
+    ax.set(title=f'ROI {compn}', xticks=[], yticks=[])
 
-    save_figure(f, str(save_fld/f'roi_{count}_mask'), verbose=False)
+    save_figure(f, str(save_fld/f'roi_{compn}_mask'), verbose=False)
     del f
 
     # save the trace
     with open(str(save_fld/f'ROI{compn}.txt'), 'w') as fl:
         for n in traces[:, compn]:
             fl.write(str(n)+'\n')
-
-    count += 1
 
 np.save(str(save_fld/'masks.npy'), masks)
 np.save(str(save_fld/'traces.npy'), traces)
