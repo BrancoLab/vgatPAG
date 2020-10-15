@@ -22,10 +22,10 @@ print('ready')
 
 # fld = Path('/Users/federicoclaudi/Dropbox (UCL - SWC)/Project_vgatPAG/analysis/doric/BF161p1_dPAG/19JUN03')
 
-fld = Path(r'D:\Dropbox (UCL - SWC)\Project_vgatPAG\analysis\doric\BF136p3_dPAG_ECIC\19MAR11')
+fld = Path(r'D:\Dropbox (UCL - SWC)\Project_vgatPAG\analysis\doric\BF136p1_dPAG\19FEB04')
 
-vid_name = '19MAR11_BF136p3_t1_ds126_raw_crop_mc_rig.tif'
-bgsub_vid_name = '19MAR11_BF136p3_t1_ds126_raw_crop_mc_rig_bgsub.tif'
+vid_name = '19FEB04_GCaMP_BF136p1_ds126_raw_crop2_mc_rig.tif'
+bgsub_vid_name = '19FEB04_GCaMP_BF136p1_ds126_raw_crop2_mc_rig_bgsub.tif'
 
 files = dict(
             raw=fld/vid_name, 
@@ -54,7 +54,7 @@ video = load_tiff_video_caiman(str(files['bgsub']))
 A = np.load(files['A'])
 
 n_components = A.shape[-1]
-good_components = [6, 5, 3, 14, 13, 1, 10, 2, 26, 28, 29, 27, 3]
+good_components = [0,1, 3, 4, 13, 10, 9, 11, 15, 19, 17, 20, 21, 27, 29, 30, 38, 39, 28, 30, 31, 26, 25, 35, 32, 33, 31, 22, 14, 11, 24, 23, 40, 41]
 print('good components: ', sorted(good_components))
 
 isgood = [True if n in good_components else False
