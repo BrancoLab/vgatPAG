@@ -19,6 +19,10 @@ from vgatPAG.database.dj_config import start_connection, dbname, manual_insert_s
 from vgatPAG.variables import miniscope_fps, tc_colors, shelter_width_px
 from vgatPAG.utils import get_spont_homings, get_spont_out_runs
 
+from pyinspect import install_traceback
+install_traceback()
+
+
 schema = start_connection()
 np.warnings.filterwarnings('ignore')
 
@@ -79,6 +83,7 @@ class Session(dj.Imported):
 class Recording(dj.Imported): #  In each session there might be multiple recordings...
     min_time_between_stims = 12 # seconds
 
+    temp_files_fld = 'D:\\Dropbox (UCL)\\Project_vgatPAG\\analysis\\doric\\VGAT_summary\\temp_tagged-mp4'
 
     definition = """
         -> Session
@@ -107,8 +112,13 @@ class Recording(dj.Imported): #  In each session there might be multiple recordi
                     raise ValueError
             else: video = videos[0]
 
-            ais = [fl for fl in rec_files if fl == f"{rec}.hdf5"]
-            if len(ais) != 1: raise ValueError
+            temp_fld= os.path.join(self.temp_files_fld, key['mouse'])
+            temp_rec_files = [f for f in os.listdir(temp_fld) if rec in f]
+            ais = [fl for fl in temp_rec_files if fl == f"{rec}_Fiji-tag.hdf5"]
+
+            if not ais:
+                continue
+            if len(ais) != 1: raise ValueError(f'Found ais: {ais}')
             else: ai = ais[0]    
 
             # Open video and get number of frames
@@ -469,9 +479,9 @@ class TiffTimes(dj.Imported):
 
                     
         # makes signal be 1 when recording is on
-        signal = np.zeros_like(camera_triggers) # This is used just for double checking that everything went well by plotting
-        for start, stop in startends:
-            signal[start:stop] = 1
+        # signal = np.zeros_like(camera_triggers) # This is used just for double checking that everything went well by plotting
+        # for start, stop in startends:
+        #     signal[start:stop] = 1
 
         # _, ax = plt.subplots()
         # ax.plot(microscope_triggers)
@@ -485,11 +495,11 @@ class TiffTimes(dj.Imported):
         startends = [(smpl2frm(s), smpl2frm(e)) for s,e in startends]
 
         # Get is recording
-        roi_data = f['CRaw_ROI_1'][()]
+        roi_data = f['Fiji_ROI_1'][()]
         is_recording = np.zeros_like(roi_data)
 
         for start, end in startends:
-            is_recording[start:end] = 1
+            is_recording[start:end-20] = 1
         
         key['is_ca_recording'] = is_recording
         key['starts'] = np.array([s for s,e in startends])
@@ -517,17 +527,19 @@ class Roi(dj.Imported):
         roi_id: varchar(128)
         ---
         signal: longblob  # Concatenated signal with nans where no recording was happening
-
     """
+
     def _make_tuples(self, key):
         session_fld = get_session_folder(**key)
         
         aifile = (Recording & key).fetch1("aifile")
         f, keys, subkeys, allkeys = open_hdf(os.path.join(session_fld, aifile))
 
-        rois = [k for k in keys if 'CRaw_ROI' in k]
+        rois = [k for k in keys if 'Fiji_ROI' in k]
         print(f"{key['rec_name']} -> {len(rois)} rois")
 
+        rec_name = key['rec_name']
+        
         for roi in rois:
             roi_trace = f[roi][()] 
             
@@ -540,8 +552,13 @@ class Roi(dj.Imported):
     def get_roi_signal_clean(self, recording_name, roi_id): 
         # Returns a roi's trace but only for the frames where recording was on
         is_recording = (TiffTimes & f"rec_name='{recording_name}'").fetch1("is_ca_recording")
+
         signal = (self & f"rec_name='{recording_name}'" & f"roi_id='{roi_id}'").fetch1("signal")
-        return np.array(signal)[np.where(is_recording)]
+
+        try:
+            return np.array(signal)[np.where(is_recording)]
+        except IndexError as e:
+            raise IndexError(f'{recording_name}-{roi_id} | Failed to get clean signal, expected {len(is_recording)} frames got {len(signal)} instead: {e}')
 
     def get_roi_signal_at_random_time(self, recording_name, roi_id, frames_pre, frames_post):
         # Returns a section of roi signal cut out at a random time
@@ -561,6 +578,59 @@ class Roi(dj.Imported):
         roi_sigs = {r:self.get_recordings_rois(mouse_name=mouse, sess_name=sess_name, rec_name=r)[1] for r in recs}
         nrois = {r:self.get_recordings_rois(mouse_name=mouse, sess_name=sess_name, rec_name=r)[2] for r in recs}
         return roi_ids, roi_sigs, nrois
+
+@schema
+class RoiDFF(dj.Imported):
+    definition = """
+        -> Session
+        roi_id: varchar(128)
+        ---
+        signal: longblob  # Concatenated signal with nans where no recording was happening
+        clean_signal: longblob  # concatenated signal withouth the OFF times
+        dff_perc: int
+        dff_th: float
+        dff_sig: longblob
+        clean_dff_sig: longblob  # concatenated DFF withouth the OFF times
+    """
+    DFF_PERCENTILE = 10
+
+    def _make_tuples(self, key):
+        ids, sigs, n = Roi().get_sessions_rois(key['mouse'], key['sess_name'])
+
+        recs = list(ids.keys())
+        ids = ids[recs[0]]
+
+        for n, rid in enumerate(ids):
+            rsig, clean_rsig = [], []
+            for rec in recs:
+                try:
+                    clean_rsig.append(Roi().get_roi_signal_clean(rec, rid))
+                except Exception as e:
+                    print(f'AAAA skipping: {e}')
+                    return
+
+                rsig.append(sigs[rec][n])
+            clean_rsig = np.concatenate(clean_rsig)
+            rsig = np.concatenate(rsig)
+
+            rkey = key.copy()
+
+            dff_threshold = np.percentile(clean_rsig, self.DFF_PERCENTILE)
+            dff = (rsig - dff_threshold)/dff_threshold
+            dff_clean = (clean_rsig - dff_threshold)/dff_threshold
+
+            rkey['roi_id'] = rid
+            rkey['dff_perc'] = self.DFF_PERCENTILE
+            rkey['dff_th'] = dff_threshold
+            rkey['dff_sig'] = dff
+
+            rkey['signal'] = rsig
+            rkey['clean_signal'] = clean_rsig
+            rkey['clean_dff_sig'] = dff_clean
+
+            manual_insert_skip_duplicate(self, rkey)
+
+
 
 
 
@@ -726,25 +796,39 @@ class ManualROIs(dj.Imported):
         roi_id: varchar(128)
         ---
         signal: longblob
+        dff: longblob
     """
 
     parent = ManualTrials
     trial_classes = None
 
     def _make_tuples(self, key):
+        # Get DFF threshold to compute dff
+        s, m = key['sess_name'], key['mouse']
+        
+
         tc = key['trial_class']
         session = (ManualTrials & key).fetch1("manual_sess_name")
 
         f, keys, subkeys, allkeys = open_hdf(summary_file)
         trial = dict(f['all'][tc][session][key['trial_name']])
 
-        rois = [k for k in trial.keys() if 'CRaw_ROI' in k]
+        rois = [k for k in trial.keys() if 'C_ROI' in k]
         for roi in rois:
             roi_trace = trial[roi][()]
+
+            rif = f"FIJI_ROI_{roi.split('_')[-1]}"
+
+            try:
+                dffth = (RoiDFF & f"sess_name='{s}'" & f"mouse='{m}'" & f"roi_id='{rif}'").fetch1('dff_th')
+            except Exception as e:
+                print(f'AAAA Skipping: {e}')
+                return
 
             rkey = key.copy()
             rkey['roi_id'] = roi
             rkey['signal'] = roi_trace
+            rkey['dff'] = (roi_trace - dffth) / dffth
 
             manual_insert_skip_duplicate(self, rkey)
 

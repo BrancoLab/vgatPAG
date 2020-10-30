@@ -98,7 +98,7 @@ def get_mouse_session_data(mouse, session, sessions):
         is_rec.append((TiffTimes & f"rec_name='{rec}'").fetch1("is_ca_recording"))
 
         sigs = roi_sigs[rec]
-        for r, roi in enumerate(sigs):
+        for r, (roi, rid) in enumerate(zip(sigs, roi_ids)):
             _signals[r].append(roi)
 
     is_rec = np.hstack(is_rec)
@@ -145,7 +145,20 @@ def get_mouse_session_data(mouse, session, sessions):
         a[:len(is_rec)] = is_rec
         is_rec = a
 
-    return tracking, ang_vel, speed, shelter_distance, clean_signal, _nrois, is_rec
+    # Compute dffs
+   
+    dffs = []
+    for rid, sig in zip(roi_ids, clean_signal):
+
+        try:
+            dffth = (RoiDFF & f"roi_id='{rid}'" & f"sess_name='{session}'" & f"mouse='{mouse}'").fetch1('dff_th')
+        except Exception as e:
+            print(f'Failed to get mouse session data: {e}')
+            return None,  None,  None,  None,  None,  None,  None
+
+        dffs.append((sig-dffth)/dffth)
+
+    return tracking, ang_vel, speed, shelter_distance, dffs, _nrois, is_rec
 
 
 def get_shelter_threat_trips(data, shelter_x=400, threat_x=800, only_recording_on=True, 

@@ -235,6 +235,7 @@ for mouse, sess, sessname in mouse_sessions:
 
     # Get data
     tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
+    if is_rec is None: continue
     tags = get_tags_by(mouse=mouse, sess_name=sess, event_type=event_type, tag_type=tag_type)
     tags2 = get_tags_by(mouse=mouse, sess_name=sess, event_type=event_type2, tag_type=tag_type)
 
@@ -320,75 +321,75 @@ for mouse, sess, sessname in mouse_sessions:
             means[roin].append(sig[start:end])
 
 
-    means2 = {s:[] for s, _ in enumerate(signals)}
-    for count, (color, (i, tag)) in enumerate(zip(colors, tags2.iterrows())):
-        start = tag.session_frame - n_frames_pre
-        end = tag.session_frame + n_frames_post
+    # means2 = {s:[] for s, _ in enumerate(signals)}
+    # for count, (color, (i, tag)) in enumerate(zip(colors, tags2.iterrows())):
+    #     start = tag.session_frame - n_frames_pre
+    #     end = tag.session_frame + n_frames_post
 
-        if np.sum(is_rec[start:end]) == 0: # recording was off
-            continue
+    #     if np.sum(is_rec[start:end]) == 0: # recording was off
+    #         continue
 
-        nxt_at_shelt = get_next_tag(tag.session_frame, at_shelt_tags)
-        escape_start = get_last_tag(tag.session_frame, escape_start_tags)
-        failed = get_next_tag(tag.session_frame, failures_tags)
+    #     nxt_at_shelt = get_next_tag(tag.session_frame, at_shelt_tags)
+    #     escape_start = get_last_tag(tag.session_frame, escape_start_tags)
+    #     failed = get_next_tag(tag.session_frame, failures_tags)
         
-        event_means['stim'].append(tag.session_stim_frame -  start)
-        if escape_start is not None:
-            event_means['turn'].append(escape_start -  start)   
-        if nxt_at_shelt is not None:
-            event_means['arrive'].append(nxt_at_shelt -  start)
+    #     event_means['stim'].append(tag.session_stim_frame -  start)
+    #     if escape_start is not None:
+    #         event_means['turn'].append(escape_start -  start)   
+    #     if nxt_at_shelt is not None:
+    #         event_means['arrive'].append(nxt_at_shelt -  start)
 
-        if start > len(tracking):
-            print(f'!! tag frame {start} is out of bounds: # frames: {len(tracking)}')
-            raise ValueError
+    #     if start > len(tracking):
+    #         print(f'!! tag frame {start} is out of bounds: # frames: {len(tracking)}')
+    #         raise ValueError
 
-        # PLOT TRACKING
-        plot_tracking_trace(axarr[0], tracking, color, f'frame {start}', start, end,
-                                 mark_frame=nxt_at_shelt, 
-                                 stim_frame=tag.session_stim_frame,
-                                 escape_start_frame = escape_start,
-                                 )
+    #     # PLOT TRACKING
+    #     plot_tracking_trace(axarr[0], tracking, color, f'frame {start}', start, end,
+    #                              mark_frame=nxt_at_shelt, 
+    #                              stim_frame=tag.session_stim_frame,
+    #                              escape_start_frame = escape_start,
+    #                              )
         
-        # PLOT SPEED and S distance
-        plot_speed_trace(axarr[1], pxperframe_to_cmpersec(speed), tracking.x, 
-                                color, f'frame {start}', start, end,
-                                 mark_frame=nxt_at_shelt, 
-                                 stim_frame=tag.session_stim_frame,
-                                 escape_start_frame = escape_start,
-                                 )
+    #     # PLOT SPEED and S distance
+    #     plot_speed_trace(axarr[1], pxperframe_to_cmpersec(speed), tracking.x, 
+    #                             color, f'frame {start}', start, end,
+    #                              mark_frame=nxt_at_shelt, 
+    #                              stim_frame=tag.session_stim_frame,
+    #                              escape_start_frame = escape_start,
+    #                              )
 
 
-        # PLOT SIGNALS
-        for roin, sig in enumerate(signals):
-            if np.std(sig[start:end]) == 0:
-                raise ValueError
-            sig = process_sig(sig, start, end, n_sec_pre, norm=NORMALIZE, filter=FILTER)
-            plot_signal_trace(axarr[roin+2], 
-                                sig,
-                                color if not HIGHLIGHT_MEAN else [.1, .1, .1], 
-                                start, end,
-                                mark_frame=nxt_at_shelt,
-                                stim_frame = tag.session_stim_frame,
-                                escape_start_frame = escape_start,
-                                )
-            means2[roin].append(sig[start:end])
+    #     # PLOT SIGNALS
+    #     for roin, sig in enumerate(signals):
+    #         if np.std(sig[start:end]) == 0:
+    #             raise ValueError
+    #         sig = process_sig(sig, start, end, n_sec_pre, norm=NORMALIZE, filter=FILTER)
+    #         plot_signal_trace(axarr[roin+2], 
+    #                             sig,
+    #                             color if not HIGHLIGHT_MEAN else [.1, .1, .1], 
+    #                             start, end,
+    #                             mark_frame=nxt_at_shelt,
+    #                             stim_frame = tag.session_stim_frame,
+    #                             escape_start_frame = escape_start,
+    #                             )
+    #         means2[roin].append(sig[start:end])
 
 
-        # MAKE CUSTOM LEGEND
-        if count == 0:
-            legend_elements = [
-                Line2D([0], [0], color=color, lw=4, marker='D', label='Turn', markersize=10, markeredgecolor='k'),
-                Line2D([0], [0], color=color, lw=4, marker='o', label='Run', markersize=10, markeredgecolor='k'),
-                Line2D([0], [0], color=color, lw=4, marker='^', label='Shelter', markersize=10, markeredgecolor='k'),
-                Line2D([0], [0], color=color, lw=4, label=str(tag.stim_frame)),
-            ]
+    #     # MAKE CUSTOM LEGEND
+    #     if count == 0:
+    #         legend_elements = [
+    #             Line2D([0], [0], color=color, lw=4, marker='D', label='Turn', markersize=10, markeredgecolor='k'),
+    #             Line2D([0], [0], color=color, lw=4, marker='o', label='Run', markersize=10, markeredgecolor='k'),
+    #             Line2D([0], [0], color=color, lw=4, marker='^', label='Shelter', markersize=10, markeredgecolor='k'),
+    #             Line2D([0], [0], color=color, lw=4, label=str(tag.stim_frame)),
+    #         ]
 
-    # PLOT MEAN TRACES
-    if HIGHLIGHT_MEAN:
-        plot_means(axarr, means, event_means)
-        try:
-            plot_means(axarr, means2, event_means, color='b', mark=False)
-        except : pass
+    # # PLOT MEAN TRACES
+    # if HIGHLIGHT_MEAN:
+    #     plot_means(axarr, means, event_means)
+    #     try:
+    #         plot_means(axarr, means2, event_means, color='b', mark=False)
+    #     except : pass
 
     # fix figure
     for n, ax in enumerate(axarr[2:]):
@@ -453,6 +454,7 @@ for mouse, sess, sessname in mouse_sessions:
 
     # Get data
     tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
+    if is_rec is None: continue
     tags = get_tags_by(mouse=mouse, sess_name=sess, event_type=event_type, tag_type=tag_type)
 
 

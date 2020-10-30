@@ -123,6 +123,9 @@ if CACHE_SIGNALS:
 
         # Get data
         tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
+        if is_rec is None:
+            continue
+        
         tags = get_tags_by(mouse=mouse, sess_name=sess, event_type=event_type, tag_type=tag_type)
         
         at_shelt_tags = get_tags_by(mouse=mouse, sess_name=sess, event_type=event_type, tag_type='VideoTag_E')

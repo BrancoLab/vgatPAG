@@ -54,12 +54,12 @@ WARP_REG = 0.0      # Strength of penalty on warp magnitude
 L2_REG = 0.0        # Strength of L2 penalty on template magnitude
 MAXLAG = .1        # Maximum amount of shift allowed.
 
-shift_model = ShiftWarping(
-    maxlag=MAXLAG,
-    smoothness_reg_scale=SMOOTH_REG,
-    warp_reg_scale=WARP_REG,
-    l2_reg_scale=L2_REG, 
-)
+# shift_model = ShiftWarping(
+#     maxlag=MAXLAG,
+#     smoothness_reg_scale=SMOOTH_REG,
+#     warp_reg_scale=WARP_REG,
+#     l2_reg_scale=L2_REG, 
+# )
 
 
 # dend = sch.dendrogram(sch.linkage(corr, method='ward'))

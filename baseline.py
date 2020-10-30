@@ -73,6 +73,7 @@ for mouse, sess, name in tqdm(mouse_sessions):
             baselines[name] = None
             continue
         tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
+        if is_rec is None: continue
         
         bss = [[] for i in np.arange(nrois)] # signal baselines
         xss = [] # x position
@@ -109,6 +110,7 @@ whole_sess_pca = {}
 for mouse, sess, name in tqdm(mouse_sessions):
         # Prep data
         tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
+        if is_rec is None: continue
 
         signal = np.vstack([s[is_rec == 1] for s in signals]) # n rois by n frames
         whole_sess_pca[name] = PCA(n_components=2).fit(signal.T)
@@ -137,6 +139,7 @@ for mouse, sess, name in tqdm(mouse_sessions):
     # Prep data
     stims = stimuli[name]
     tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
+    if is_rec is None: continue
 
     frames_pre = N_sec_pre * sessions_fps[mouse][sess]
     frames_post = N_sec_post * sessions_fps[mouse][sess]

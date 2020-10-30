@@ -29,7 +29,7 @@ fld = Path('D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\Fede\\plo
 for mouse, sess, sessname in tqdm(mouse_sessions):
     # get data
     tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
-
+    if is_rec is None: continue
     # Plot signals 
     f, axarr = plt.subplots(ncols=2, nrows=nrois, figsize=(20, 3*nrois))
 
@@ -102,7 +102,7 @@ all_dists = []
 for mouse, sess, sessname in tqdm(mouse_sessions):
     # get data
     tracking, ang_vel, speed, shelter_distance, signals, nrois, is_rec = get_mouse_session_data(mouse, sess, sessions)
-
+    if is_rec is None: continue
     # Plot signals 
     # f, axarr = plt.subplots(nrows=5, ncols=6, figsize=(20, 20), sharex=True, sharey=False)
     # axarr = axarr.flatten()
