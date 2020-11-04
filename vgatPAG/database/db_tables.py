@@ -587,7 +587,7 @@ class RoiDFF(dj.Imported):
         dff_sig: longblob
         clean_dff_sig: longblob  # concatenated DFF withouth the OFF times
     """
-    DFF_PERCENTILE = 10
+    DFF_PERCENTILE = 30
 
     def _make_tuples(self, key):
         ids, sigs, n = Roi().get_sessions_rois(key['mouse'], key['sess_name'])

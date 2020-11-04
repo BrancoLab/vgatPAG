@@ -47,8 +47,8 @@ from vgatPAG.database.dj_config import manual_insert_skip_duplicate
 # Roi.populate(display_progress=True)
 RoiDFF.populate(display_progress=True)
 
-# # ---------------------------- Pop manually curate --------------------------- #
-# print("Populate manually curated data")
+# ---------------------------- Pop manually curate --------------------------- #
+print("Populate manually curated data")
 ManualTrials.populate()
 ManualROIs.populate(display_progress=True)
 
