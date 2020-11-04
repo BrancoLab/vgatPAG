@@ -54,19 +54,22 @@ WARP_REG = 0.0      # Strength of penalty on warp magnitude
 L2_REG = 0.0        # Strength of L2 penalty on template magnitude
 MAXLAG = .1        # Maximum amount of shift allowed.
 
-# shift_model = ShiftWarping(
-#     maxlag=MAXLAG,
-#     smoothness_reg_scale=SMOOTH_REG,
-#     warp_reg_scale=WARP_REG,
-#     l2_reg_scale=L2_REG, 
-# )
+fps = 30
 
-
-# dend = sch.dendrogram(sch.linkage(corr, method='ward'))
+n_sec_pre = 4 # rel escape onset
+n_sec_post = 6 # # rel escape onset
+n_frames_pre = n_sec_pre * fps
+n_frames_post = n_sec_post * fps
 
 # cluster
-N_CLUSTERS = 5
+N_CLUSTERS = 4
 cluster = AgglomerativeClustering(n_clusters=N_CLUSTERS, affinity='euclidean', linkage='ward')
+
+fld = Path('D:\\Dropbox (UCL - SWC)\\Project_vgatPAG\\analysis\\doric\\Fede\\plots\\ManualTagsAligned')
+
+corr = np.load(os.path.join(fld, 'cached_corr_mtx.npy'))
+cache = pd.read_hdf(os.path.join(fld, 'cached_traces.h5'), key='hdf')
+
 _ = cluster.fit_predict(corr)
 
 
@@ -96,7 +99,7 @@ for ax, clust_id in zip(axarr, set(cluster.labels_)):
     plot_mean_and_error(mean, std, ax, zorder=99, color='r')
 
     ax.axvline(n_frames_pre, lw=2, color='g')
-    ax.set(title=f'Cluster {clust_id} - {len(clust_sigs)} trials', ylim=[-150, 150])
+    ax.set(title=f'Cluster {clust_id} - {len(clust_sigs)} trials', ylim=[-5, 5])
 
     
 
@@ -151,27 +154,3 @@ for roin in traces.roi_n.unique():
 all_sigs = np.array(all_sigs).transpose((1, 2, 0))
 all_sigs.shape # n trials - n samples - n rois
     
-# %%
-
-
-# Fit to binned spike times.
-shift_model.fit(all_sigs, iterations=50)
-
-shift_aligned_data = shift_model.transform(all_sigs)
-
-
-f, axarr = plt.subplots(ncols=4, nrows=4, figsize=(24, 18))
-axarr = axarr.flatten()
-
-for n, ax in enumerate(axarr):
-    # pot not-warped traces
-    ax.plot(all_sigs[:, :, n].T, color='k', alpha=.3 ) 
-    # plot_mean_and_error(np.mean(all_sigs[:, :, n], 0), np.std(all_sigs[:, :, n], 0), ax, color='k')
-
-    # pot warped traces
-    ax.plot(shift_aligned_data[:, :, n].T, color='r', alpha=.3)
-    # plot_mean_and_error(np.mean(shift_aligned_data[:, :, n], 0), np.std(shift_aligned_data[:, :, n], 0), ax, color='r')
-# 
-    ax.axvline(n_frames_pre, lw=2, color='g')
-    # break
-# %%

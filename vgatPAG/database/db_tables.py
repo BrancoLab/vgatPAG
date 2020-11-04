@@ -136,6 +136,7 @@ class Recording(dj.Imported): #  In each session there might be multiple recordi
             rkey['n_frames'] = nframes
             rkey['fps_behav'] = fps
             rkey['n_samples'] = n_samples
+
             manual_insert_skip_duplicate(self, rkey)
 
 
@@ -440,6 +441,7 @@ class TiffTimes(dj.Imported):
         --- 
         camera_frames: longblob
         microscope_frames: longblob
+        n_frames: int
     """
 
     sampling_frequency = 10000
@@ -476,18 +478,6 @@ class TiffTimes(dj.Imported):
             raise ValueError('Something went wrong')
         startends = [(s, e) for s,e in zip(rec_starts, rec_ends)]
 
-
-                    
-        # makes signal be 1 when recording is on
-        # signal = np.zeros_like(camera_triggers) # This is used just for double checking that everything went well by plotting
-        # for start, stop in startends:
-        #     signal[start:stop] = 1
-
-        # _, ax = plt.subplots()
-        # ax.plot(microscope_triggers)
-        # ax.plot(signal)
-        # plt.show()
-
         # Go from sample number to frame numbers
         def smpl2frm(val):
             return np.int32(round((val / self.sampling_frequency) * fps))
@@ -506,6 +496,7 @@ class TiffTimes(dj.Imported):
         key['ends'] = np.array([e for s,e in startends])
         key['camera_frames'] = camera_triggers
         key['microscope_frames'] = camera_triggers
+        key['n_frames'] = len(is_recording)
 
         manual_insert_skip_duplicate(self, key)
 
@@ -539,9 +530,13 @@ class Roi(dj.Imported):
         print(f"{key['rec_name']} -> {len(rois)} rois")
 
         rec_name = key['rec_name']
+        is_recording = (TiffTimes & f"rec_name='{rec_name}'").fetch1("is_ca_recording")
         
         for roi in rois:
             roi_trace = f[roi][()] 
+
+            if len(roi_trace) != len(is_recording):
+                raise ValueError('oops')
             
             rkey = key.copy()
             rkey['roi_id'] = roi
@@ -606,8 +601,9 @@ class RoiDFF(dj.Imported):
                 try:
                     clean_rsig.append(Roi().get_roi_signal_clean(rec, rid))
                 except Exception as e:
-                    print(f'AAAA skipping: {e}')
-                    return
+                    is_recording = (TiffTimes & f"rec_name='{rec}'").fetch1("is_ca_recording")
+                    signal = (Roi & f"rec_name='{rec}'" & f"roi_id='{rid}'").fetch1("signal")
+                    raise ValueError(f'AAAA skipping: {e}')
 
                 rsig.append(sigs[rec][n])
             clean_rsig = np.concatenate(clean_rsig)
@@ -822,8 +818,7 @@ class ManualROIs(dj.Imported):
             try:
                 dffth = (RoiDFF & f"sess_name='{s}'" & f"mouse='{m}'" & f"roi_id='{rif}'").fetch1('dff_th')
             except Exception as e:
-                print(f'AAAA Skipping: {e}')
-                return
+                raise ValueError(f'AAAA Skipping: {e}')
 
             rkey = key.copy()
             rkey['roi_id'] = roi

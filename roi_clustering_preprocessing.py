@@ -79,10 +79,10 @@ ZSCORE = True
 
 
 def process_sig(sig, baseline=None,  dff=False, filt=False, zsc=False):
-    if filt: # median filter
-        sig = smooth_hanning(sig, window_len=21)
-    if dff: # dff
-        sig =  (sig - np.mean(baseline))  / np.mean(baseline)
+    # if filt: # median filter
+    #     sig = smooth_hanning(sig, window_len=21)
+    # if dff: # dff
+    #     sig =  (sig - np.mean(baseline))  / np.mean(baseline)
 
     if zsc:
         sig = zscore(sig)

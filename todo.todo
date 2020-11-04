@@ -1,0 +1,15 @@
+while I sort out the ROIs, I think the next steps are to implement to look at our list again and do a few ‘simple’ touch-base things first, which are basically things we can see by eye:
+☐ -there are cells that are active during escape (is it escape points such as onset, offset, or just speed?)
+☐ -there are cells active when the mouse enters the shelter or freezes (not many but pooled should be enough)
+☐ -get peak activity out (2SD above baseline), and look at correlations to tags
+☐ -compute correlation to locomotion during controls and homings
+
+☐ -some few cells are ‘risk assessment’ and i need to come up with a better word, how do we quantify this
+
+☐ plot that the neurons seem to not care about the stimulus, and then that’s our reason to pool all data and ignore stimulus identity
+
+☐ one thing I need to think about a bit more is how to deal with variablity within the ROIs.
+(re homings, most ROIs that care about stim-evoked flights, also seem to care about spont. flights)
+(re control runs - here we should look at the first naive trial separately, and hopefully we can pool that across all 
+mice because after a few trials, sessions, the controls are not really controls anymore, because the mice are scared, 
+so it would be interesting to look at the ‘evolution of control trials’ over time)

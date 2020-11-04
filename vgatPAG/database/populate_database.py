@@ -23,38 +23,38 @@ from vgatPAG.database.dj_config import manual_insert_skip_duplicate
 # Recording.populate()
 
 
-# # -------------------------------- Pop Stimuli ------------------------------- #
+# -------------------------------- Pop Stimuli ------------------------------- #
 # print("Stimuli")
 # VisualStimuli.populate(display_progress=True)
 # AudioStimuli.populate(display_progress=True)
 
-# # ----------------------- Pop AI, metadata and stimuli ----------------------- #
+# ----------------------- Pop AI, metadata and stimuli ----------------------- #
 # print("Populating Tiff Times")
-TiffTimes.populate(display_progress=True)
+# TiffTimes.populate(display_progress=True)
 
 
-# # ----------------------------- Manual behav tags ---------------------------- #
+# ----------------------------- Manual behav tags ---------------------------- #
 # print('Populating behaviour tags')
-ManualBehaviourTags.populate(display_progress=True)
+# ManualBehaviourTags.populate(display_progress=True)
 
 # # --------------------------------- Tracking --------------------------------- #
 # print("Populating Tracking")
-Trackings.populate(display_progress=True)
+# Trackings.populate(display_progress=True)
 
 
-# ---------------------------------- Pop ROI --------------------------------- #
+# # ---------------------------------- Pop ROI --------------------------------- #
 # print("Popualte ROIs")
-Roi.populate(display_progress=True)
+# Roi.populate(display_progress=True)
 RoiDFF.populate(display_progress=True)
 
-# # # ---------------------------- Pop manually curate --------------------------- #
+# # ---------------------------- Pop manually curate --------------------------- #
 # print("Populate manually curated data")
 ManualTrials.populate()
 ManualROIs.populate(display_progress=True)
 
 
-print(Recording())
+# print(Recording())
 
-print(RoiDFF())
+# print(RoiDFF())
 
-print(ManualROIs())
+# print(ManualROIs())

@@ -1,4 +1,5 @@
 import numpy as np
+from fcutils.maths.filtering import smooth_hanning
 
 from vgatPAG.database.db_tables import *
 from scipy.ndimage.filters import gaussian_filter1d
@@ -78,7 +79,7 @@ def get_session_stimuli_frames(mouse, sess, clean=True):
     return vstims, astims
 
 
-def get_mouse_session_data(mouse, session, sessions):
+def get_mouse_session_data(mouse, session, sessions, hanning_window=6):
     """
         Fetches tracking and calcium data for one mouse in one experiment
         concatenating across all recordings within that session.
@@ -131,6 +132,10 @@ def get_mouse_session_data(mouse, session, sessions):
 
     clean_signal = []
     for sig in signals:
+        if hanning_window:
+            sig = smooth_hanning(sig, window_len=hanning_window)[:-hanning_window-1]
+
+
         if len(sig) < len(tracking):
             s = np.zeros((len(tracking)))
             s[:len(sig)] = sig
@@ -156,9 +161,12 @@ def get_mouse_session_data(mouse, session, sessions):
             print(f'Failed to get mouse session data: {e}')
             return None,  None,  None,  None,  None,  None,  None
 
-        dffs.append((sig-dffth)/dffth)
+        if hanning_window:
+            dffs.append(smooth_hanning((sig-dffth)/dffth, window_len=hanning_window)[:-hanning_window-1])
+        else:
+            dffs.append((sig-dffth)/dffth,)
 
-    return tracking, ang_vel, speed, shelter_distance, dffs, _nrois, is_rec
+    return tracking, ang_vel, speed, shelter_distance, dffs, clean_signal, _nrois, is_rec, roi_ids
 
 
 def get_shelter_threat_trips(data, shelter_x=400, threat_x=800, only_recording_on=True, 
