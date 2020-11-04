@@ -28,7 +28,7 @@ from vedo.colors import colorMap
 fld = Path('D:\\Dropbox (UCL)\\Project_vgatPAG\\analysis\\doric\\Fede\\ddf_tag_aligned')
 
 DO = dict(
-    tag_plots=False,
+    tag_plots=True,
     plot_chunks_baseline=True,
 )
 
@@ -84,6 +84,9 @@ for mouse, sess, sessname in track(mouse_sessions, description='plotting aligned
 
         # loop over tagged events
         for count, (i, tag) in enumerate(tags.iterrows()):
+            if not is_rec[tag.session_frame]:
+                continue
+
             start = tag.session_frame - n_frames_pre
             end = tag.session_frame + n_frames_post
 
@@ -91,7 +94,7 @@ for mouse, sess, sessname in track(mouse_sessions, description='plotting aligned
             RAW = sig[start:end]
             WHOLE_TRACE_DFF = dff[start:end]  # DFF with threshold computed on whole session
 
-            doric_chunk_th = get_doric_chunk_baseline(tiff_starts, tiff_ends, start, end, sig)
+            doric_chunk_th = get_doric_chunk_baseline(tiff_starts, tiff_ends, start, sig)
             DORIC_CHUNK_DFF = (RAW - doric_chunk_th)/doric_chunk_th
 
             baseline_th =  np.percentile(sig[tag.stim_frame - n_frames_pre:tag.stim_frame], RoiDFF.DFF_PERCENTILE)
@@ -168,6 +171,8 @@ for mouse, sess, sessname in track(mouse_sessions, description='plotting whole t
             # mark stimuli
             tgs = tags.loc[(tags.stim_frame < end)&(tags.stim_frame > start)]
             for stim_frame in tgs.stim_frame.values:
+                if not is_rec[stim_frame]:
+                    continue
                 axarr[n].plot([stim_frame, stim_frame], [th, sig[stim_frame]], color='k', lw=2, alpha=.8)
                 axarr[n].scatter(stim_frame, sig[stim_frame], color='k', s=100, zorder=99)
 

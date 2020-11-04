@@ -73,6 +73,7 @@ for mouse, sess, sessname in track(mouse_sessions, description='plotting aligned
         for count, (i, tag) in enumerate(tags.iterrows()):
             if not is_rec[tag.session_frame]:
                 continue
+                # raise ValueError
 
             start = tag.session_frame - n_frames_pre
             end = tag.session_frame + n_frames_post
@@ -124,6 +125,7 @@ ax.axvline(chunk_start)
 ax.axvline(chunk_end)
 
 ax.axvline(tag.session_frame, color='red')
+ax.axvline(tag.stim_frame, color='g')
 
 ax.set(xlim=[chunk_start - 1000, chunk_end + 1000])
 # %%
