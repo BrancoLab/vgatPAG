@@ -42,8 +42,8 @@ print("Firing DLC up...")
 
 dlc.analyze_videos(dlc_config_file, 
                 videos_to_process, 
-                save_as_csv=False,
-                dynamic=(True, 0.5, 100))
+                save_as_csv=False,)
+                # dynamic=(True, 0.5, 100))
 
 
 

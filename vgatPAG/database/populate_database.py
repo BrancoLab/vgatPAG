@@ -9,7 +9,7 @@ from vgatPAG.database.db_tables import *
     Creates a datajoint dabase from the summary .hdf file to facilitate files handling
 """
 
-# Experiment.drop()
+# Roi.drop()
 
 # --------------------------- Pop Mouse and Session -------------------------- #
 # Mouse.populate()

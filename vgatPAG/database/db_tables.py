@@ -3,6 +3,8 @@ import numpy as np
 from pathlib import Path
 from rich.prompt import IntPrompt
 from scipy import signal
+from scipy.stats import zscore
+from rich.progress import track
 import pandas as pd
 import matplotlib.pyplot as plt
 from vgatPAG.database.dj_config import start_connection, dbname, manual_insert_skip_duplicate
@@ -120,9 +122,9 @@ class Roi(dj.Imported):
         id: varchar(32)
         ---
         raw: longblob
-        filtered: longblob
         dff: longblob
         dff_percentile: int
+        zscore: longblob
     """
 
     dff_percentile = 30
@@ -138,6 +140,11 @@ class Roi(dj.Imported):
         return signal.filtfilt(b, a, sig)
 
     @staticmethod
+    def dff(sig, perc):
+        th = np.percentile(sig, perc)
+        return (sig-th)/th
+
+    @staticmethod
     def chunk_wise(sig, chunk_starts, chunk_ends, func, *args, shift=0, **kwargs):
         out = np.zeros_like(sig)
         for start, end in zip(chunk_starts, chunk_ends):
@@ -146,35 +153,54 @@ class Roi(dj.Imported):
             out[start:end] = func(sig[start-shift:end], *args, **kwargs)[shift:]
         return out
 
+    @staticmethod
+    def merge_apply_split(sig, is_rec, chunk_starts, chunk_ends, func, *args, **kwargs):
+        # merge signal
+        out = np.zeros_like(sig)
+        merged = sig[is_rec==1]
+
+        # apply
+        applied = func(merged, *args, **kwargs)
+
+        # Split again
+        n = 0
+        for start, end in zip(chunk_starts, chunk_ends):
+            dur = end - start
+            out[start:end] = applied[n:n+dur]
+            n += dur
+        
+        return out
+
+
     def _make_tuples(self, key):
         recdata = (Experiment & key).fetch('hdf_path', 'is_ca_rec', 'ca_rec_starts', 'ca_rec_ends', 'video_fps')
         starts, ends = recdata[2][0], recdata[3][0]
-        fps = recdata[4][0]
+        is_rec, fps = recdata[1][0], recdata[4][0]
 
         f, keys, subkeys, allkeys = open_hdf(str(recdata[0][0]))
-
-        for roi in [k for k in keys if 'Fiji_ROI' in k]:
+        rois = [k for k in keys if 'Fiji_ROI' in k]
+        for roi in track(rois, description='Extracting'):
             sig = f[roi][()]
+
+            # DFF
+            dff = self.chunk_wise(sig, starts, ends, self.dff, self.dff_percentile)
+
             # Remove fast noise
-            denoised = self.chunk_wise(sig, starts, ends, self.lowpass, 1, fps)
+            # denoised = self.chunk_wise(dff, starts, ends, self.lowpass, 1, fps)
+            denoised = self.chunk_wise(dff, starts, ends, rolling_mean, 30)
 
             # Remove slow fluctuations
             slow = self.chunk_wise(denoised, starts, ends, self.percfilt, window=10 * fps, percentile=10)
+            noslow = dff-slow
 
-            noslow = sig-slow
-
-            # DFF
+            # zscore
+            zscored = self.merge_apply_split(noslow, is_rec, starts, ends, zscore)
 
             # Store
-
-
-            f, ax = plt.subplots()
-            ax.plot(sig, label='sig')
-            # ax.plot(denoised, label='denoised')
-            # ax.plot(slow, label='slow oscillations')
-            ax.plot(noslow, label='slow removed and denoised')
-
-            ax.legend()
-            ax.set(xlim=[0, 10000])
-
-            plt.show()
+            rkey = key.copy()
+            rkey['id'] = roi
+            rkey['raw'] = sig
+            rkey['dff'] = noslow
+            rkey['dff_percentile'] = self.dff_percentile
+            rkey['zscore'] = zscored
+            manual_insert_skip_duplicate(self, rkey)
