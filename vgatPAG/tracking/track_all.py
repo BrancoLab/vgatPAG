@@ -5,30 +5,15 @@
 import sys
 sys.path.append("./")
 import os 
+from pathlib import Path
 
-from vgatPAG.paths import mice_folders, dlc_config_file
-from vgatPAG.database.tables import *
+import deeplabcut as dlc
 
-
-try:
-    import deeplabcut as dlc
-except:
-    raise ImportError("Could not import deeplabcut, make sure to use an environment with working dlc installation")
-
-
-try:
-    import fcutils
-except:
-    raise ImportError("Could not import 'fcutils', please install with : 'pip install git+https://github.com/FedeClaudi/fcutils.git --upgrade' ")
 from fcutils.file_io.utils import get_subdirs, listdir, get_file_name
 
-
-try:
-    import behaviour
-except:
-    raise ImportError("Could not import 'behaviour', please install with : pip install git+https://github.com/BrancoLab/Behaviour.git --upgrade' ")
 from behaviour.tracking.tracking import prepare_tracking_data, compute_body_segments
 
+from vgatPAG.paths import dlc_config_file
 
 
 bsegments = [ # Body segments used to get stuff like angular velocity, orientation etc
@@ -38,27 +23,21 @@ bsegments = [ # Body segments used to get stuff like angular velocity, orientati
 ]
 
 
+fld = Path('D:\\Dropbox (UCL)\\Project_vgatPAG\\analysis\\doric\\VGAT_summary\\temp_tagged-mp4')
 
-# ---------------------------------------------------------------------------- #
+mice_subs = [f for f in fld.glob('*') if f.is_dir()]
 
-#                                   TRACKING                                   #
-# ---------------------------------------------------------------------------- #
-# Loop over each mouse's folder to get the list of files not tracked
+
 videos_to_process = []
-
-recordings = Recording().fetch(as_dict=True)
-for rec in recordings:
-    video = rec['videofile']
-    fld = get_session_folder(**rec)
-
-    dlc_analysed = [f for f in listdir(fld) if 'DLC' in f and f.endswith(".h5") and get_file_name(video) in f]
-    if not dlc_analysed:
-        videos_to_process.append(os.path.join(fld, video))
-
+for sub in mice_subs:
+    vids = [f for f in sub.glob('*.mp4')]
+    h5s = [f.name.split('DLC')[0] for f in sub.glob('*.h5')]
+    vids = [v for v in vids if v.name.split('.mp4')[0] not in h5s]
+    videos_to_process.extend(vids)
+videos_to_process = [str(v) for v in videos_to_process]
 
 # Start tracking
 print(f"Found {len(videos_to_process)} videos not tracked:")
-print(*videos_to_process, sep="\n")
 print("Firing DLC up...")
 
 dlc.analyze_videos(dlc_config_file, 

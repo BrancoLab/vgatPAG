@@ -22,6 +22,11 @@ from Analysis.tag_aligned import (
 
 from fcutils.plotting.plot_elements import plot_mean_and_error
 from fcutils.plotting.utils import save_figure, clean_axes
+from fcutils.maths.utils import derivative
+from scipy.stats import zscore
+
+from myterial import light_blue_light, purple_light
+
 
 # %%
 # ---------------------------------- params ---------------------------------- #
@@ -57,19 +62,23 @@ for mouse, sess, sessname in track(mouse_sessions, description='plotting aligned
     
     # Get tags metadata
     tags = get_tags_by(mouse=mouse, sess_name=sess, event_type=event_type, tag_type=tag_type)
+    if len(tags) < 4:
+        continue
 
     # Get doric chunks times
     tiff_starts, tiff_ends = get_tiff_starts_ends(is_rec)
 
     # Create figure
     f, axarr = plt.subplots(nrows=nrois, ncols=1,  figsize=(18, 4 * nrois), sharex=True)
-    # f, axarr = plt.subplots(nrows=2, ncols=1,  figsize=(18, 8), sharex=True)
+
 
     # Loop over rois
     for n, (dff, sig, rid) in enumerate(zip(dffs, signals, roi_ids)):
 
+        # ------------------------------- Get roi data ------------------------------- #
+
         # loop over tagged events
-        roi_sigs = []
+        roi_sigs, total_sig = [], []
         for count, (i, tag) in enumerate(tags.iterrows()):
             if not is_rec[tag.session_frame]:
                 continue
@@ -84,48 +93,45 @@ for mouse, sess, sessname in track(mouse_sessions, description='plotting aligned
             # Prepare traces for plotting
             RAW = sig[start:end]
             doric_chunk_th = get_doric_chunk_baseline(tiff_starts, tiff_ends, start, sig)
-            DORIC_CHUNK_DFF = (RAW - doric_chunk_th)/doric_chunk_th
+            DORIC_CHUNK_DFF = zscore((RAW - doric_chunk_th)/doric_chunk_th)
+            
+            total_sig.append((sig-doric_chunk_th)/doric_chunk_th)
             roi_sigs.append(DORIC_CHUNK_DFF)
 
-            # Get signal within the doric chunk
-            chunk_start, chunk_end = get_doric_chunks(tiff_starts, tiff_ends, start)
-            chunk = (sig[chunk_start:chunk_end] - doric_chunk_th)/doric_chunk_th
+        # ------------------------------- Get threshold ------------------------------ #
 
-            # Get a threshold for the chunk
-            high_th = np.mean(chunk) + 2 * np.std(chunk)
-            low_th = np.mean(chunk) - 2 * np.std(chunk)
-            above = np.where(DORIC_CHUNK_DFF > high_th)[0]
-            below = np.where(DORIC_CHUNK_DFF < low_th)[0]
+        # stack data
+        roi_sigs = np.vstack(roi_sigs)
 
-            # Plot stuff
-            # axarr[n].axhline(high_th, lw=2, color='r', zorder=-1, alpha=.3)
-            for selected in (above, below):
-                axarr[n].scatter(selected, DORIC_CHUNK_DFF[selected], 
-                        color='skyblue', s=25, zorder=10, lw=.5, edgecolors=[.2, .2, .2])
 
-            axarr[n].plot(x_pre, DORIC_CHUNK_DFF[:n_frames_pre+1], color=[.8, .8, .8], zorder=-1)
-            axarr[n].plot(x_post, DORIC_CHUNK_DFF[n_frames_pre:], color=[.7, .7, .7], zorder=-1)
+        # Get recording threshold
+        s = np.concatenate(total_sig)
+        th = np.mean(s) + 1 * np.std(s)
+        thl = np.mean(s) - 1 * np.std(s)
+        axarr[n].axhspan(thl, th, color=light_blue_light, alpha=.3, hatch='/', zorder=110, label='threshold')
+
+        # ----------------------------------- Plot ----------------------------------- #
 
         # Plot mean signal
-        if not roi_sigs: 
-            continue
+        axarr[n].plot(roi_sigs.T, color=[.9, .9, .9], zorder=-1)
 
-        mean = np.mean(np.vstack(roi_sigs), 0)
-        std = np.std(np.vstack(roi_sigs), 0)
+        mean = np.mean(roi_sigs, 0)
+        std = np.std(roi_sigs, 0)
         plot_mean_and_error(mean, std, axarr[n], color='salmon')
         axarr[n].plot(mean, color=[.2, .2, .2], zorder=-1, lw=5)
 
         axarr[n].axvline(n_frames_pre, lw=2, color=[.3, .3, .3])
+        axarr[n].set(ylabel=f'{rid}\nchunk DFF signal')
+        axarr[n].legend()
         # break
-    # break
-# %%
-f, ax = plt.subplots()
-ax.plot(sig, color='k')
-ax.axvline(chunk_start)
-ax.axvline(chunk_end)
 
-ax.axvline(tag.session_frame, color='red')
-ax.axvline(tag.stim_frame, color='g')
+    axarr[0].set(title=sessname)
+    axarr[-1].set(xlabel='frames')
 
-ax.set(xlim=[chunk_start - 1000, chunk_end + 1000])
-# %%
+    clean_axes(f)
+    f.tight_layout()
+    save_figure(f, fld / (sessname))
+
+    break
+
+

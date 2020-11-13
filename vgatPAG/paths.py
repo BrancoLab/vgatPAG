@@ -37,7 +37,7 @@ dlc_config_file = os.path.join(main_code_folder, 'DLC', 'vgatPAG-federico-2020-0
 # ---------------------------------------------------------------------------- #
 #                                 SUMMARY DATA                                 #
 # ---------------------------------------------------------------------------- #
-summary_file = os.path.join(main_data_folder, 'VGAT_summary', 'VGAT_summary.hdf5')
+summary_file = os.path.join(main_data_folder, 'VGAT_summary', 'VGAT_summary_tagData.hdf5')
 
 
 # ---------------------------------------------------------------------------- #

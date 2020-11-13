@@ -2,35 +2,23 @@ import sys
 sys.path.append("./")
 
 
-from fcutils.file_io.io import open_hdf
-
-from vgatPAG.paths import summary_file
 from vgatPAG.database.db_tables import *
-from vgatPAG.database.dj_config import manual_insert_skip_duplicate
 
 
 """
     Creates a datajoint dabase from the summary .hdf file to facilitate files handling
 """
 
-# RoiDFF.drop()
+# Experiment.drop()
 
-
-# # --------------------------- Pop Mouse and Session -------------------------- #
-# print("Populating sessions")
+# --------------------------- Pop Mouse and Session -------------------------- #
 # Mouse.populate()
-# Session.populate()
-# Recording.populate()
+# Experiment.populate(display_progress=True)
+# CaFPS.populate(display_progress=True)
+
+Roi.populate(display_progress=True)
 
 
-# -------------------------------- Pop Stimuli ------------------------------- #
-# print("Stimuli")
-# VisualStimuli.populate(display_progress=True)
-# AudioStimuli.populate(display_progress=True)
-
-# ----------------------- Pop AI, metadata and stimuli ----------------------- #
-# print("Populating Tiff Times")
-# TiffTimes.populate(display_progress=True)
 
 
 # ----------------------------- Manual behav tags ---------------------------- #
@@ -45,16 +33,12 @@ from vgatPAG.database.dj_config import manual_insert_skip_duplicate
 # # ---------------------------------- Pop ROI --------------------------------- #
 # print("Popualte ROIs")
 # Roi.populate(display_progress=True)
-RoiDFF.populate(display_progress=True)
+# RoiDFF.populate(display_progress=True)
 
-# ---------------------------- Pop manually curate --------------------------- #
-print("Populate manually curated data")
-ManualTrials.populate()
-ManualROIs.populate(display_progress=True)
+# # # ---------------------------- Pop manually curate --------------------------- #
+# print("Populate manually curated data")
+# ManualTrials.populate()
+# ManualROIs.populate(display_progress=True)
 
 
-# print(Recording())
-
-# print(RoiDFF())
-
-# print(ManualROIs())
+# print(Times())

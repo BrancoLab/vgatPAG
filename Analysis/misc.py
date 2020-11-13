@@ -1,5 +1,6 @@
 import numpy as np
-from fcutils.maths.utils import derivative
+from fcutils.maths.utils import derivative, rolling_mean
+from fcutils.maths.filtering import butter_lowpass_filter
 
 from vgatPAG.database.db_tables import RoiDFF
 
@@ -9,8 +10,8 @@ def get_tiff_starts_ends(is_rec):
         for a session
     '''
     der = derivative(is_rec)
-    tiff_starts = np.where(der > 0)[0]
-    tiff_ends = np.where(der < 0)[0]
+    tiff_starts = np.where(der > 0)[0] + 1
+    tiff_ends = np.where(der < 0)[0] + 1
 
     return tiff_starts, tiff_ends
 
@@ -34,3 +35,33 @@ def get_doric_chunk_baseline(tiff_starts, tiff_ends, start, signal, p=None):
 
     if te<tf: raise ValueError
     return percentile(signal[tf:te], p=p)
+
+def get_chunked_dff(sig, tiff_starts, tiff_ends):
+    dff = np.zeros_like(sig)
+
+    for start, end in zip(tiff_starts, tiff_ends):
+        th = percentile(sig[start:end])
+        dff[start:end] = (sig[start:end] - th)/th
+        dff[start] = dff[start+1]
+        dff[end-3:end] = dff[end-4]
+    return dff
+
+def get_chunk_rolling_mean_subracted_signal(sig, tiff_starts, tiff_ends, window=100):
+    """
+        Takes a roi RAW signal and computes a rolling mean of each signal's chunk.
+        Then it subtracts this smoothed signal from the raw to get only high
+        frequency noise.
+    """
+    pad = 1
+    smoothed = np.zeros_like(sig)
+
+    for start, end in zip(tiff_starts, tiff_ends):
+        smoothed[start:end] = rolling_mean(sig[start:end], window)
+        # smoothed[start:end] = butter_lowpass_filter(sig[start:end], .1,  100)
+        smoothed[start:start+5] = sig[start:start+5]
+        smoothed[end-5:end] = sig[end-5:end]
+
+
+    diff = sig - smoothed
+
+    return diff, smoothed

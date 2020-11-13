@@ -3,6 +3,11 @@ mice:
     - BF164p1
     - BF164p2
     - BF166p3
+    - BF118p2
+    - BF121p2
+    - BF136p1
+    - BF136p3
+
 
 sessions:
     BF161p1:
@@ -19,7 +24,6 @@ sessions:
         19JUN18:
             - 19JUN19_BF164p1_GCaMP_t1
             - 19JUN19_BF164p1_GCaMP_t2
-            - 19JUN19_BF164p1_GCaMP_t3_chase
 
     BF164p2:
         19JUN24:
@@ -40,3 +44,27 @@ sessions:
             - 19JUN19_BF166p3_GCaMP_t3
 
 
+    BF118p2:
+        18SEP14:
+            - 18SEP14_GCaMP_BF118p2_t1
+        18SEP18:
+            - 18SEP18_GCaMP_BF118p2_t1
+            - 18SEP18_GCaMP_BF118p2_t2
+        18SEP27:
+            - 18SEP27_GCaMP_BF118p2_t1
+        18NOV29:
+            - 18NOV29_GCaMP_BF118p2_t1
+
+    BF121p2:
+        18SEP26:
+        18SEP26:
+        18OCT09:
+        18OCT19:
+
+    BF136p1:
+        19FEB04:
+        10FEB25:
+
+    BF136p3:
+        19FEB04:
+        19MAR11:

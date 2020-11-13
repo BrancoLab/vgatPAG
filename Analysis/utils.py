@@ -166,6 +166,9 @@ def get_mouse_session_data(mouse, session, sessions, hanning_window=6):
         else:
             dffs.append((sig-dffth)/dffth,)
 
+    dffs = [df * is_rec[:len(df)] for df in dffs]
+    clean_signal = [df * is_rec[:len(df)] for df in clean_signal]
+
     return tracking, ang_vel, speed, shelter_distance, dffs, clean_signal, _nrois, is_rec, roi_ids
 
 
