@@ -1,45 +1,28 @@
 import numpy as np
 from pathlib import Path
 from rich.progress import track
-from Analysis import (
-        mice,
-        sessions,
-        recordings,
-        mouse_sessions,
-        get_mouse_session_data,
-)
-from Analysis.tag_aligned import (
-    manual_tags,
-    get_tags_by,
-    get_next_tag,
-    get_last_tag,
-)
-from Analysis.misc import get_tiff_starts_ends, get_chunked_dff
-from vgatPAG.database.db_tables import Recording
+from vgatPAG.database.db_tables import Roi, Sessions
 
 
 main_fld = Path('D:\\Dropbox (UCL)\\Project_vgatPAG\\analysis\\doric\\VGAT_summary\\temp_tagged-mp4')
 
-for mouse, sess, sessname in track(mouse_sessions, description='saving DFFs'):
-    
-    # Get data
-    tracking, ang_vel, speed, shelter_distance, dffs, signals, nrois, is_rec, roi_ids = \
-                        get_mouse_session_data(mouse, sess, sessions)
+sessions = (Sessions * Sessions.Tracking).fetch(as_dict=True)
 
-    # Make folder to save
-    fld = main_fld / mouse
-    if not fld.exists():
-        raise FileExistsError(f'Cant find folder {fld}')
-    sessfld = fld / f'{sess}_DFF'
-    sessfld.mkdir(exist_ok=True)
+for sess in track(sessions):
+    mouse, date = sess['mouse'], sess['date']
 
-    # loop over rois
-    for n, (sig, rid) in enumerate(zip(signals, roi_ids)):
-        # Get chunks start end times
-        tiff_starts, tiff_ends = get_tiff_starts_ends(is_rec)
+    fld = main_fld / mouse / date
+    fld.mkdir(exist_ok=True)
 
-        # get chunked dff
-        dff = get_chunked_dff(sig, tiff_starts, tiff_ends)
+    np.save(fld/'xpos.npy', sess['x'])
+    np.save(fld/'ypos.npy', sess['y'])
+    np.save(fld/'speed.npy', sess['s'])
 
-        np.save(sessfld/f'{sess}_{mouse}_{rid}_dff.npy', dff)
+    # Get ROIs
+    rois = (Roi & f'mouse="{mouse}"' & f'date="{date}"').fetch(as_dict=True)
 
+    for roi in rois:
+        np.save(fld / f'{roi["id"]}_dff.npy', roi['dff'])
+        np.save(fld / f'{roi["id"]}_raw.npy', roi['raw'])
+        np.save(fld / f'{roi["id"]}_slow_dff.npy', roi['slow_dff'])
+        np.save(fld / f'{roi["id"]}_zscore.npy', roi['zscore'])

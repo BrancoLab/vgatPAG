@@ -8,7 +8,7 @@ except Exception as e:
 import sys
 
 ip = "localhost"
-dbname = 'vgatPAG'    # Name of the database subfolder with data
+dbname = 'vgatPAG2'    # Name of the database subfolder with data
 
 def start_connection():
     """
