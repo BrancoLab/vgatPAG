@@ -3,7 +3,7 @@ sys.path.append('./')
 
 from fcutils.file_io.io import open_hdf, load_yaml
 import pandas as pd
-from vgatPAG.database.db_tables import Session, Recording, Trackings, get_session_folder
+from vgatPAG.database.db_tables import Sessions
 from pathlib import Path
 from fcutils.video.utils import trim_clip
 import numpy as np
@@ -30,9 +30,9 @@ def parse_manual_tags_file():
         stim_frame=[],
     )
 
-    def add_entry_tags(events, event_type, mouse, sess_name, rec_number, rec_idx):        
+    def add_entry_tags(sess, events, event_type, mouse, sess_name, rec_number, rec_idx):        
         # Get total number of frames
-        n_frames = np.cumsum((Recording & f"sess_name='{sess_name}'" & f"mouse='{mouse}'").fetch('n_frames'))
+        n_frames = sess.frames_shift
 
 
         for event in list(events): # loop over frame_xxx video
@@ -84,8 +84,10 @@ def parse_manual_tags_file():
 
 
     # loop over each session
-    for i, sess in pd.DataFrame(Session().fetch()).iterrows():
-        name = sess.mouse+'_'+sess.sess_name
+    for i, sess in pd.DataFrame(Sessions().fetch()).iterrows():
+        mouse = sess.mouse
+        date = sess.date
+        name = mouse+'_'+date
 
         # loop over each event type (e.g. UltrasoundLoom)
         for ev in events_types:
@@ -100,8 +102,8 @@ def parse_manual_tags_file():
                     tnum = int(entry[idx+2:idx+3])
                 else:
                     tnum = 0
-                add_entry_tags(f['all'][ev][entries[0]],
-                                ev, sess.mouse, sess.sess_name, tnum, 0)
+                add_entry_tags(sess, f['all'][ev][entries[0]],
+                                ev, mouse, date, tnum, 0)
             elif entries:
                 trials = []
                 for entry in entries:
@@ -110,21 +112,21 @@ def parse_manual_tags_file():
                 trials = list(set(trials))
                 
                 if len(set(trials)) == 1:
-                    if sess.mouse != 'BF164p1':
+                    if mouse != 'BF164p1':
                         raise NotImplementedError('This has only been tested for one mouse')
                     t = entry[idx:idx+3]
-                    recnames = (Recording & f"sess_name='{sess.sess_name}'" & f"mouse='{sess.mouse}'").fetch('rec_name')
+                    recnames = (Recording & f"sess_name='{date}'" & f"mouse='{mouse}'").fetch('rec_name')
                     tridx = [j for j,name in enumerate(recnames) if t in name]
                     if len(tridx) != 1:
                         raise ValueError
 
                     for entry in entries:
-                        add_entry_tags(f['all'][ev][entry],
-                                ev, sess.mouse, sess.sess_name, trials[0], tridx[0]+1)
+                        add_entry_tags(sess, f['all'][ev][entry],
+                                ev, mouse, date, trials[0], tridx[0]+1)
                 else:
                     for nt, (entry, tnum) in enumerate(zip(entries, trials)):
-                        add_entry_tags(f['all'][ev][entry],
-                                ev, sess.mouse, sess.sess_name, tnum, nt)
+                        add_entry_tags(sess, f['all'][ev][entry],
+                                ev, mouse, date, tnum, nt)
 
 
     return pd.DataFrame(tags)

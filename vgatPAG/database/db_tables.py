@@ -399,3 +399,71 @@ class Roi(dj.Imported):
             rkey['slow_filter_window'] = self.slow_filter_window
             manual_insert_skip_duplicate(self, rkey)
 
+@schema
+class ManualBehaviourTags(dj.Imported):
+    definition = """
+        # manual tagging of behaviour from videos by Vanessa
+        -> Sessions
+    """
+    filepath = 'D:\\Dropbox (UCL)\\Project_vgatPAG\\analysis\\doric\\VGAT_summary\\VGAT_summary_tagData.hdf5'
+    tags_names = ['VideoTag_A', 'VideoTag_B', 'VideoTag_C', 'VideoTag_D',
+                        'VideoTag_E', 'VideoTag_F', 'VideoTag_G', 'VideoTag_H', 'VideoTag_L']
+
+    class Tags(dj.Part):
+        definition = """
+            -> ManualBehaviourTags
+            event_type: varchar(64)
+            tag_type: varchar(64)
+            frame: int
+            session_frame: int
+            ---
+            stim_frame: int
+            session_stim_frame: int
+            rec_n: int
+        """
+
+    def _make_tuples(self, key):
+        hdf = (Experiment & key).fetch('hdf_path')
+        for h in hdf:
+            f, keys, subkeys, allkeys = open_hdf(h)
+            events_types = subkeys['all']
+
+            name = key['mouse']+'_'+key['date']
+
+            for etype in subkeys['all']:
+                entries = [k for k in list(f['all'][etype]) if name in k]
+                if not entries:
+                    continue
+
+                for en in entries:
+                    tags = f['all'][etype][en]
+                    a = 1
+
+        # tags = pd.read_hdf('vgatPAG/database/manual_tags.h5')
+
+        # # Get tags for the recording
+        # tags = tags.loc[(tags.mouse == key['mouse'])&
+        #                 (tags.sess_name == key['date'])]
+        
+        # # Make an entry in the main class
+        # manual_insert_skip_duplicate(self, key)
+
+        # # Loop over event types
+        # for ev in tags.event_type.unique():
+
+        #     # Loop over tag type
+        #     for tt in tags.loc[tags.event_type == ev].tag_type.unique():
+        #         _tags = tags.loc[(tags.event_type == ev)&(tags.tag_type == tt)]
+
+        #         # Create an entry for each tag
+        #         for i, row in _tags.iterrows():
+        #             rkey= key.copy()
+        #             rkey['event_type'] = row.event_type
+        #             rkey['tag_type'] = row.tag_type
+        #             rkey['frame'] = row.frame
+        #             rkey['session_frame'] = row.session_frame
+        #             rkey['stim_frame'] = row.stim_frame
+        #             rkey['session_stim_frame'] = row.session_stim_frame
+        #             rkey['rec_n'] = row.rec_number
+
+        #             manual_insert_skip_duplicate(self.Tags, rkey)
