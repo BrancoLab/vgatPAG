@@ -358,35 +358,32 @@ class Roi(dj.Imported):
             ends = roi.ca_rec_ends
             fps = roi.video_fps
 
+            # remove noise
+            sig = self.chunk_wise(sig, starts, ends, rolling_mean, 6)
+
             # whole session DFF
             dff, th = self.merge_apply_split(sig, is_rec, starts, ends, self.dff, self.dff_percentile)
 
-            # remove noise
-            dff = self.chunk_wise(dff, starts, ends, rolling_mean, 6)
-
             # Remove slow fluctuations
-            # slow = self.chunk_wise(dff, starts, ends, self.percfilt, 
-            #             window=self.slow_filter_window * fps, percentile=self.slow_filter_window)
             slow = self.chunk_wise(dff, starts, ends, rolling_mean, self.slow_filter_window * fps)
 
             # zscore
             zscored, _ = self.merge_apply_split(slow, is_rec, starts, ends, zscore)
 
-            # save figure with traces
-            fig, axarr = plt.subplots(ncols=2, sharex=True, figsize=(32, 9))
-            axarr[0].plot(sig, color='k', lw=2, label='raw')
-            axarr[0].plot(is_rec, label='rec on')
-            axarr[0].axhline(th, lw=2, color='seagreen', label='F')
-            axarr[0].legend()
+            # # save figure with traces
+            # fig, axarr = plt.subplots(ncols=2, sharex=True, figsize=(32, 9))
+            # axarr[0].plot(sig, color='k', lw=2, label='raw')
+            # axarr[0].plot(is_rec, label='rec on')
+            # axarr[0].axhline(th, lw=2, color='seagreen', label='F')
+            # axarr[0].legend()
 
-            axarr[1].plot(dff, color='k', lw=3, label='dff')
-            axarr[1].plot(slow, color='salmon', lw=1, label='low pass')
-            axarr[1].legend()
-            x = np.arange(0, len(sig), 300*fps)
-            axarr[1].set(title=roi.roi_name, xticks=x, xticklabels=(x/fps).astype(np.int64), xlabel='seconds')
-            save_figure(fig, f'D:\\Dropbox (UCL)\\Project_vgatPAG\\analysis\\doric\\Fede\\dff_filtering\\{key["mouse"]}_{key["date"]}_{roi.roi_name}', verbose=False)
-            plt.close()
-
+            # axarr[1].plot(dff, color='k', lw=3, label='dff')
+            # axarr[1].plot(slow, color='salmon', lw=1, label='low pass')
+            # axarr[1].legend()
+            # x = np.arange(0, len(sig), 300*fps)
+            # axarr[1].set(title=roi.roi_name, xticks=x, xticklabels=(x/fps).astype(np.int64), xlabel='seconds')
+            # save_figure(fig, f'D:\\Dropbox (UCL)\\Project_vgatPAG\\analysis\\doric\\Fede\\dff_filtering\\{key["mouse"]}_{key["date"]}_{roi.roi_name}', verbose=False)
+            # plt.close()
 
             # Store
             rkey = key.copy()
@@ -419,51 +416,84 @@ class ManualBehaviourTags(dj.Imported):
             ---
             stim_frame: int
             session_stim_frame: int
-            rec_n: int
         """
+    def _append(self, key, event_type, tag, onset_frame, stim, stim_session):
+            tkey = key.copy()
+            tkey['event_type'] = event_type
+            tkey['tag_type'] = tag
+            tkey['frame'] = onset_frame +  stim
+            tkey['session_frame'] = onset_frame +  stim + stim_session
+            tkey['stim_frame'] = stim
+            tkey['session_stim_frame'] = stim_session
+
+            # skip trials where cable got caught in arena
+            if key['mouse'] == 'BF164p1':
+                if key['date'] == '19JUN03' and stim == 19415:
+                    return
+            elif key['mouse'] == 'BF164p1':
+                if key['date'] == '19JUN05' and stim == 95806:
+                    return
+                if key['date'] == '19JUN018' and stim == 32290:
+                    return
+
+            manual_insert_skip_duplicate(self.Tags, tkey)
+
+
+    def process_stim_evoked(self, event_type, f, frames_shift, key, rec_n):
+        for stim, entries in dict(f[event_type]).items():
+            # get stim frame and relative to sess start
+            stim = int(stim.split('_')[-1])
+            stim_session = stim + frames_shift[rec_n]
+
+            # get individual tags
+            tags = [k for k in dict(entries).keys() if 'VideoTag_' in k]
+            for tag in tags:
+                # tag time in ms relative to stim onset
+                onset_ms = dict(entries)[tag][()][0] - 20000
+
+                # tag time in frame relative to stim onset
+                onset_frame = int(onset_ms * 30 / 1000)
+
+                # We got everything, add to table
+                self._append(key, event_type, tag, onset_frame, stim, stim_session)
+
+
+    def process_other(self, event_type, f, frames_shift, key, rec_n):
+        for stim, entries in dict(f[event_type]).items():
+            # get stim frame and relative to sess start
+            stim = int(stim.split('_')[-1])
+            stim_session = stim + frames_shift[rec_n]
+
+            tag = 'VideoTag_B'
+            # the 'stim' frame number is the onset of the tag
+            onset_ms = 0
+            onset_frame = 0
+
+            # We got everything, add to table
+            self._append(key, event_type, tag, onset_frame, stim, stim_session)
+
 
     def _make_tuples(self, key):
+        # Insert into main table
+        manual_insert_skip_duplicate(self, key)
+
+        # Get number of frmes per recording
+        frames_shift = (Sessions & key).fetch1('frames_shift')
+
+        # Iterate over recordings
         hdf = (Experiment & key).fetch('hdf_path')
-        for h in hdf:
-            f, keys, subkeys, allkeys = open_hdf(h)
-            events_types = subkeys['all']
+        for rec_n, h in enumerate(hdf):
+            h = h.replace('.hdf5', '_forFede.hdf5')
 
-            name = key['mouse']+'_'+key['date']
+            try:
+                f, keys, subkeys, allkeys = open_hdf(h)
+            except FileExistsError:
+                print(f'File: {Path(h).name} does not exist!')
 
-            for etype in subkeys['all']:
-                entries = [k for k in list(f['all'][etype]) if name in k]
-                if not entries:
-                    continue
+            # Get tag entries for each type of event
+            for k in keys:
+                if k in ('audio','visual', 'auditory', 'visual_audio'):
+                    self.process_stim_evoked(k, f, frames_shift, key, rec_n)
+                else:
+                    self.process_other(k, f, frames_shift, key, rec_n)
 
-                for en in entries:
-                    tags = f['all'][etype][en]
-                    a = 1
-
-        # tags = pd.read_hdf('vgatPAG/database/manual_tags.h5')
-
-        # # Get tags for the recording
-        # tags = tags.loc[(tags.mouse == key['mouse'])&
-        #                 (tags.sess_name == key['date'])]
-        
-        # # Make an entry in the main class
-        # manual_insert_skip_duplicate(self, key)
-
-        # # Loop over event types
-        # for ev in tags.event_type.unique():
-
-        #     # Loop over tag type
-        #     for tt in tags.loc[tags.event_type == ev].tag_type.unique():
-        #         _tags = tags.loc[(tags.event_type == ev)&(tags.tag_type == tt)]
-
-        #         # Create an entry for each tag
-        #         for i, row in _tags.iterrows():
-        #             rkey= key.copy()
-        #             rkey['event_type'] = row.event_type
-        #             rkey['tag_type'] = row.tag_type
-        #             rkey['frame'] = row.frame
-        #             rkey['session_frame'] = row.session_frame
-        #             rkey['stim_frame'] = row.stim_frame
-        #             rkey['session_stim_frame'] = row.session_stim_frame
-        #             rkey['rec_n'] = row.rec_number
-
-        #             manual_insert_skip_duplicate(self.Tags, rkey)
