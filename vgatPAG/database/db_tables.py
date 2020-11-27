@@ -141,6 +141,22 @@ class Trackings(dj.Imported):
             angular_velocity: longblob
         """
 
+    def smooth_scale(self, data, is_speed = False, is_deg=False):
+        # Smooth with rolling mean
+        data = rolling_mean(data, 3)
+
+        if not is_deg:
+            if is_speed:
+                # px/frame -> cm/s
+                data = (data/13.9) * 30 # x / px per cm * fps
+            else:
+                # px -> cm
+                data = data / 13.9
+        else:
+            # deg/frame -> deg/s
+            data = data * 30
+        return data
+
     # Populate method
     def _make_tuples(self, key):
         fld = self.main_fld/key["mouse"]
@@ -162,11 +178,11 @@ class Trackings(dj.Imported):
             bp_key = key.copy()
             bp_key['bp'] = bp
             
-            bp_key['x'] = tracking.x.values
-            bp_key['y'] = tracking.y.values
-            bp_key['speed'] = tracking.speed.values
-            bp_key['dir_of_mvmt'] = tracking.direction_of_movement.values
-            bp_key['angular_velocity'] = tracking.angular_velocity.values
+            bp_key['x'] = self.smooth_scale(tracking.x.values, is_speed=False)
+            bp_key['y'] = self.smooth_scale(tracking.y.values, is_speed=False)
+            bp_key['speed'] = self.smooth_scale(tracking.speed.values, is_speed=True)
+            bp_key['dir_of_mvmt'] = rolling_mean(tracking.direction_of_movement.values, 3)
+            bp_key['angular_velocity'] = self.smooth_scale(tracking.angular_velocity.values, is_deg=True)
 
             self.BodyPartTracking.insert1(bp_key)
 
@@ -359,16 +375,16 @@ class Roi(dj.Imported):
             fps = roi.video_fps
 
             # remove noise
-            sig = self.chunk_wise(sig, starts, ends, rolling_mean, 6)
+            sig = self.chunk_wise(sig, starts, ends, rolling_mean, 3)
 
             # whole session DFF
             dff, th = self.merge_apply_split(sig, is_rec, starts, ends, self.dff, self.dff_percentile)
 
+            # zscore
+            zscored, _ = self.merge_apply_split(dff, is_rec, starts, ends, zscore)
+
             # Remove slow fluctuations
             slow = self.chunk_wise(dff, starts, ends, rolling_mean, self.slow_filter_window * fps)
-
-            # zscore
-            zscored, _ = self.merge_apply_split(slow, is_rec, starts, ends, zscore)
 
             # # save figure with traces
             # fig, axarr = plt.subplots(ncols=2, sharex=True, figsize=(32, 9))
@@ -422,7 +438,7 @@ class ManualBehaviourTags(dj.Imported):
             tkey['event_type'] = event_type
             tkey['tag_type'] = tag
             tkey['frame'] = onset_frame +  stim
-            tkey['session_frame'] = onset_frame +  stim + stim_session
+            tkey['session_frame'] = onset_frame + stim_session
             tkey['stim_frame'] = stim
             tkey['session_stim_frame'] = stim_session
 

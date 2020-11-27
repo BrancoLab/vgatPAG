@@ -1,59 +1,54 @@
-from collections import namedtuple
+from vgatPAG.database.db_tables import ManualBehaviourTags, Roi, Sessions
+import pandas as pd
 
-from vgatPAG.database.db_tables import *
+from myterial import  light_blue, amber, light_green, salmon
 
-from Analysis.utils import (
-            get_mouse_session_data,
-            get_shelter_threat_trips,
-            get_session_stimuli_frames,
-            pxperframe_to_cmpersec,
-            compute_stationary_vs_locomoting)
-from Analysis.colors import *
+# define someuseful colors
+shelt_dist_color = light_blue
+speed_color = amber
+ang_vel_colr = light_green
+signal_color = salmon
 
-px_to_cm = 13.9
+# Get session tags
+def get_session_tags(mouse, date, etypes=None, ttypes=None):
+    info = dict(mouse=mouse, date=date)
+    tags = pd.DataFrame((ManualBehaviourTags * ManualBehaviourTags.Tags & info))
 
-# Get all mice
-mice = Mouse.fetch("mouse")
+    if etypes:
+        tags = tags.loc[tags.event_type.isin(list(etypes))]
 
-# Get all sessions
-sessions = {m:(Session & f"mouse='{m}'").fetch("sess_name") for m in mice}
+    if ttypes:
+        tgs = [f'VideoTag_{t}' for t in ttypes]
+        tags = tags.loc[tags.tag_type.isin(tgs)]
 
-mouse_sessions = []
-for mouse in mice:
-    for sess in sessions[mouse]:
-        mouse_sessions.append((mouse,
-                    sess, f'{mouse}-{sess}'))
-
-# Get the recordings for each session
-recordings = {m:{s:(Recording & f"sess_name='{s}'" & f"mouse='{m}'").fetch(as_dict=True) for s in sessions[m]} for m in mice}
-recording_names = {m:{s:list((Recording & f"sess_name='{s}'" & f"mouse='{m}'").fetch('rec_name')) for s in sessions[m]} for m in mice}
-
-# Get fps for each session
-sessions_fps = {m:{s:Recording().get_recording_fps(mouse=m, 
-                    sess_name=s, rec_name=recording_names[m][s][0]) 
-                    for s in sessions[m]} 
-                    for m in mice}
+    return tags
 
 
-def print_recordings_tree():
-    for _mouse in mice:
-        print(f'\n{_mouse}:')
-        for _session in sessions[_mouse]:
-            print(f"      |---{_session}")
+# Get session data
+def get_session_data(mouse, date, roi_data_type='dff'):
+    '''
+        Returns all tracking data and ROIs data for a session, 
+        as a dataframe
+    '''
+    # Get tracking data
+    info = dict(mouse=mouse, date=date)
+    tracking = pd.DataFrame((Sessions * Sessions.Tracking & info).fetch(as_dict=True))
+    rois = pd.DataFrame((Sessions * Roi & info).fetch(as_dict=True))
 
-            recs = Recording().get_sessions_recordings(_mouse, _session)
-            print("      |       |--", end='')
-            print(*recs, sep=" || ")     
+    N = len(rois.iloc[0].dff)
+    data = dict(
+        x = tracking.x.values[0][:N],
+        y = tracking.y.values[0][:N],
+        s = tracking.s.values[0][:N],
+        is_rec = tracking.is_ca_rec.values[0],
+    )
 
-
-# Get stimuli
-stimstuple = namedtuple('stimuli', 'vis aud all')
-stimuli = {}
-clean_stimuli = {}
-for mouse in mice:
-    for sess in sessions[mouse]:
-        vis, aud = get_session_stimuli_frames(mouse, sess, clean=False)
-        stimuli[f'{mouse}-{sess}'] = stimstuple(vis, aud, vis+aud)
-
-        vis, aud = get_session_stimuli_frames(mouse, sess, clean=True)
-        clean_stimuli[f'{mouse}-{sess}'] = stimstuple(vis, aud, vis+aud)
+    rois_data = {}
+    for i, roi in rois.iterrows():
+        rois_data[roi['id']] = roi[roi_data_type]
+        
+    try:
+        return pd.DataFrame(data), pd.DataFrame(rois_data)
+    except  Exception:
+        print(f'Failed to create dfs, lengths: {[len(v) for v in data.values()]} and {[len(v) for v in rois_data.values()]}')
+        return None, None

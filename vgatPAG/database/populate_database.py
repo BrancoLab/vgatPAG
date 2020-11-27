@@ -9,7 +9,7 @@ from vgatPAG.database.db_tables import *
     Creates a datajoint dabase from the summary .hdf file to facilitate files handling
 """
 
-# ManualBehaviourTags.drop()
+# Sessions.drop()
 
 
 # -------------------------- experiment-based tables ------------------------- #
@@ -17,11 +17,10 @@ from vgatPAG.database.db_tables import *
 # Mouse.populate()
 # Experiment.populate(display_progress=True)
 # # CaFPS.populate(display_progress=True)
-# Trackings.populate(display_progress=True)
+Trackings.populate(display_progress=True)
 
 
 # --------------------------- Session based tables --------------------------- #
-# Sessions.populate(display_progress=True)
-# Roi.populate(display_progress=True)
-
+Sessions.populate(display_progress=True)
+Roi.populate(display_progress=True)
 ManualBehaviourTags.populate(display_progress=True)
