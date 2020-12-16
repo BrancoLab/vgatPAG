@@ -46,7 +46,7 @@ fld = Path('D:\\Dropbox (UCL)\\Project_vgatPAG\\analysis\\doric\\Fede\\\ddf_tag_
 
 # %%
 def dff(sig):
-    th = np.nanpercentile(sig[:n_frames_pre], .3)
+    th = np.nanpercentile(sig[:n_frames_pre], 30)
     return rolling_mean((sig - th)/th, 3)
 
 def get_slope(y):
@@ -96,11 +96,34 @@ def complete_X_Y(seq):
     T = ('STIM', 'H', 'B', 'C', 'E', 'after')
     return start, end , X, Y, T
 
+
+def get_onset(sig):
+    '''
+        Gets onset by looiking at last
+        time the signal ramped up before a max
+    '''
+    smoothed = rolling_mean(sig, 20)
+    atmax = np.argmax(smoothed)
+
+    deriv = derivative(smoothed)
+    onset = None
+    for th in (0.001, 0.01, 0.1):
+        try:
+            onset = np.where(np.abs(deriv[:atmax])<=0.001)[0][-1]
+        except IndexError:
+            pass
+        else:
+            break
+
+    return onset
+
+
 # %%
 lbls = ('baseline', 'stim', 'start', 'run', 'shelter', 'stop')
 ACTIVE = dict(mouse=[], date=[], roi=[], active=[])
 for sess in Sessions.fetch(as_dict=True):
     print(sess['mouse'], sess['date'])
+
     data, rois = get_session_data(sess['mouse'], sess['date'], roi_data_type='raw')
     if data is None: continue
     rois[data.is_rec==0] = np.nan
@@ -121,7 +144,7 @@ for sess in Sessions.fetch(as_dict=True):
 
 
         # Create a figure
-        f, axarr = plt.subplots(nrows=2, ncols=4, figsize=(18, 9), sharex=False,  gridspec_kw={'width_ratios': [4, 1, 1, 1]})
+        f, axarr = plt.subplots(nrows=2, ncols=5, figsize=(18, 9), sharex=False,  gridspec_kw={'width_ratios': [4, 1, 1, 1, 1]})
 
         ax0 = axarr[0, 0].twinx()
         axarr[0, 0].axvline(n_frames_pre, lw=2, color=salmon)
@@ -159,6 +182,12 @@ for sess in Sessions.fetch(as_dict=True):
             # plot ROI signal
             sig = dff(rois[roi][start:end])
 
+            # Get sognal onset
+            onset = get_onset(sig)
+            if onset is not None:
+                axarr[1, 0].scatter(onset, sig[onset], lw=4, color=[.2, .2, .2], zorder=200)
+                axarr[1, 4].plot(sig[onset-30:onset+30], color=blue_grey_dark)
+
             # Get a distribution of signal slopes in baseline
             K = 20
             baseline = sig[n_frames_pre-K:n_frames_pre]
@@ -168,10 +197,10 @@ for sess in Sessions.fetch(as_dict=True):
             slopes['baseline'].extend(list(slope))
             for n in range(int(len(baseline)/window)):
                 x0, x1 = n * window - (window/2) + n_frames_pre-K, (n+1) * window - (window/2) + n_frames_pre-K
-                try:
-                    plot_with_slope(axarr[1, 0], x0, x1, slope[n*window], intercept[n*window], lw=2, color='g', zorder=100)
-                except:
-                    pass
+                # try:
+                #     plot_with_slope(axarr[1, 0], x0, x1, slope[n*window], intercept[n*window], lw=2, color='g', zorder=100)
+                # except:
+                #     pass
 
 
             # Plot sequence chunks
@@ -185,10 +214,10 @@ for sess in Sessions.fetch(as_dict=True):
 
                     for m in range(int(K/window)):
                         x0, x1 = m * window - (window/3) + 31 , (m+1) * window - (window/3) + 31 
-                        try:
-                            plot_with_slope(tag_axes[n], x0, x1, slope[m*window], intercept[m*window], lw=3, color=blue_grey_darker, zorder=100)
-                        except:
-                            pass
+                        # try:
+                        #     plot_with_slope(tag_axes[n], x0, x1, slope[m*window], intercept[m*window], lw=3, color=blue_grey_darker, zorder=100)
+                        # except:
+                        #     pass
                     slopes[tag].extend(list(slope))
 
 
@@ -254,10 +283,14 @@ for sess in Sessions.fetch(as_dict=True):
             ax.spines['left'].set_visible(False)
             ax.axvline(30, color=[.2, .2, .2], lw=3)
 
+        axarr[1, 4].set(title='Onset')
+        axarr[1, 4].set(xticks=[0, 30, 60], xticklabels=[-1, 0, 1], xlabel='s', yticks=[], ylim=axarr[1, 0].get_ylim())
+        axarr[1, 4].axvline(30, color=[.2, .2, .2], lw=3)
+
         save_figure(f, fld/f'{sess["mouse"]}_{sess["date"]}__{roi}_active_{ACTIVE["active"][-1]}', verbose=False)
-        # plt.close(f)
-        break
-    break
+        plt.close(f)
+        # break
+    # break
 pd.DataFrame(ACTIVE).to_hdf('ACTIVE_ROIS.h5', key='hdf')
 
 # %%
@@ -378,8 +411,8 @@ for sess in Sessions.fetch(as_dict=True):
     # break
 
 
-# %%
+# # %%
 
-# %%
+# # %%
 
-# %%
+# # %%

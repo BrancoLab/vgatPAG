@@ -2,9 +2,18 @@ from vgatPAG.database.db_tables import ManualBehaviourTags, Roi, Sessions
 import pandas as pd
 from collections import namedtuple
 
+def seq_type(seq):
+    if seq.D is None:
+        if seq.A is None or seq.H is None or seq.B is None or seq.E is None or seq.C is None:
+            return 'incomplete'
+        return 'complete'
+    elif seq.B is None or seq.H is None:
+        return 'failed'
+    else:
+        return 'aborted'
 
 def get_tags_sequences(tags):
-    sequence = namedtuple('sequence', 'STIM, H, B, C, E')
+    sequence = namedtuple('sequence', 'STIM, A, H, B, C, E, D')
     sequences = []
     
     # get stimuli
@@ -16,7 +25,7 @@ def get_tags_sequences(tags):
         if n < len(stims)-1:
             tgs = tgs.loc[tgs.session_frame < stims[n+1]]
 
-        for ttype in ('H','B','C','E'):
+        for ttype in ('A', 'H','B','C','E', 'D'):
             nxt = tgs.loc[(tgs.tag_type==f'VideoTag_{ttype}')]
 
             if nxt.empty:
@@ -55,17 +64,18 @@ def get_session_data(mouse, date, roi_data_type='dff'):
     tracking = pd.DataFrame((Sessions * Sessions.Tracking & info).fetch(as_dict=True))
     rois = pd.DataFrame((Sessions * Roi & info).fetch(as_dict=True))
 
-    N = len(rois.iloc[0].dff)
+    N = len(rois.iloc[0].dff)-1
+    is_rec = tracking.is_ca_rec.values[0]
     data = dict(
         x = tracking.x.values[0][:N],
         y = tracking.y.values[0][:N],
         s = tracking.s.values[0][:N],
-        is_rec = tracking.is_ca_rec.values[0],
+        is_rec = tracking.is_ca_rec.values[0][:N],
     )
 
     rois_data = {}
     for i, roi in rois.iterrows():
-        rois_data[roi['id']] = roi[roi_data_type]
+        rois_data[roi['id']] = roi[roi_data_type][:-1]
         
     try:
         return pd.DataFrame(data), pd.DataFrame(rois_data)

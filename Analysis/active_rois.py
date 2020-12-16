@@ -60,6 +60,8 @@ def manual_select_active():
     # curate active ROIs
     selected = dict(date=[], mouse=[], roi=[], active=[])
     active = pd.read_hdf('ACTIVE_ROIS.h5', key='hdf')
+
+    A = []
     for i, roi in active.iterrows():
         roi_cur = cur.loc[(cur.mouse==roi.mouse)&(cur.date==roi.date)&(cur.roi==roi.roi)]
 
@@ -72,6 +74,12 @@ def manual_select_active():
         selected['mouse'].append(roi.mouse)
         selected['roi'].append(roi.roi)
         selected['active'].append(keep)
+
+        if keep:
+            A.append(f'{roi.date} {roi.mouse} {roi.roi}\n')
+
+    with open('active_rois.txt', 'w+') as w:
+        w.writelines(A)
 
     pd.DataFrame(selected).to_hdf('ACTIVE_ROIS_CURATED.h5', key='hdf')
 
