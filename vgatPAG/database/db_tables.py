@@ -15,7 +15,7 @@ from fcutils.file_io.io import open_hdf
 from fcutils.maths.utils import derivative, rolling_mean
 from fcutils.video.utils import get_cap_from_file, get_video_params
 from fcutils.plotting.utils import save_figure
-from behaviour.tracking.tracking import prepare_tracking_data
+from _tracking import prepare_tracking_data
 
 schema = start_connection()
 
