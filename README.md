@@ -1,6 +1,8 @@
 # vgatPAG
 Note that this code needs an older version of `fcutils`: https://github.com/FedeClaudi/fcutils/tree/06703a18bcfa6b473ba5f4a80803fdd89e5a52b2
 
+Note that you'll need `datajoint=0.12.4`.
+
 ## Setup for Caiman
 Currently working of the dev branch of caiman, install with these steps:
 
