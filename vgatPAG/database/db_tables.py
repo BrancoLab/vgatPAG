@@ -55,8 +55,12 @@ class Experiment(dj.Imported):
     def _make_tuples(self, key):
         sub =  [f for f in fld.glob('*') if f.is_dir() and key['mouse'] in str(f)][0]
 
-        hdfs = sorted([f for f in sub.glob('*.hdf5') if 'Fiji-tag' in f.name])
+        print(f"Processing {key} - {sub}")
+        # print(f"Found subfolders {sub}")
+
+        hdfs = sorted([f for f in sub.glob('*.hdf5') if 'Fiji-tag' in f.name and 'forFede' not in f.name])
         exp_names = [f.name.split('_Fiji')[0] for f in hdfs]
+        # print(f"Found HDF files: {hdfs}")
 
         exp_data = {}
         for exp in exp_names:
@@ -64,6 +68,7 @@ class Experiment(dj.Imported):
             v = [f for f in sub.glob('*.mp4') if exp in str(f)]
 
             if len(h)!=1 or len(v)!=1:
+                print(f"Mouse {key['mouse']}, exp: {exp} --- number of videos {len(v)} doesnt match number of HDFs {len(h)} | {len(hdfs)}")
                 continue
                 # raise ValueError(f'h:{h}\nv:{v}')
 
